@@ -1003,6 +1003,9 @@ const DAWPage = () => {
 
         <div className="daw-workspace">
           <div className="track-headers">
+            <div className="timeline-header-spacer">
+              タイムライン
+            </div>
             {tracks.map(track => (
               <TrackHeader 
                 key={track.id} 
