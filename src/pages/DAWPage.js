@@ -577,9 +577,9 @@ const DAWPage = () => {
     console.log('ドロップ処理開始:', { trackId, timePosition, draggedClip });
     
     try {
-      // 拍に合わせて位置を調整
-      const beatWidth = 100; // 1拍の幅（px）
-      const snappedPosition = Math.round(timePosition / beatWidth) * beatWidth;
+      // 8分音符に合わせて位置を調整（50px単位）
+      const subBeatWidth = 50; // 8分音符の幅（px）
+      const snappedPosition = Math.round(timePosition / subBeatWidth) * subBeatWidth;
       
       // 既存のクリップの移動かどうかチェック
       if (draggedClip) {
@@ -685,8 +685,8 @@ const DAWPage = () => {
     // ドラッグプレビューの更新
     const rect = e.currentTarget.getBoundingClientRect();
     const timePosition = e.clientX - rect.left;
-    const beatWidth = 100;
-    const snappedPosition = Math.round(timePosition / beatWidth) * beatWidth;
+    const subBeatWidth = 50; // 8分音符の幅
+    const snappedPosition = Math.round(timePosition / subBeatWidth) * subBeatWidth;
     
     const trackElement = e.currentTarget;
     const trackRect = trackElement.getBoundingClientRect();
@@ -1050,7 +1050,7 @@ const DAWPage = () => {
           <li>左側の音素材パネルから音素材をトラックにドラッグ&ドロップして配置</li>
           <li>配置済みの音素材もドラッグして別の場所に移動できます</li>
           <li>ドラッグ中は配置予定位置に青い影が表示されます</li>
-          <li>音素材は拍に合わせて自動的に配置されます</li>
+          <li>音素材は8分音符（裏拍含む）に合わせて自動的に配置されます</li>
           <li>音素材パネルの▶️ボタンで個別に音を確認できます</li>
           <li>▶️ボタンで再生、⏸️ボタンで一時停止、⏹️ボタンで停止</li>
           <li>BPMを変更して音楽の速さを調整</li>
@@ -1153,6 +1153,7 @@ const Timeline = ({ bpm }) => {
   const measures = 16; // 16小節表示
   const beatsPerMeasure = 4; // 4/4拍子
   const beatWidth = 100; // 1拍の幅
+  const subBeatWidth = beatWidth / 2; // 8分音符（裏拍）の幅
 
   return (
     <div className="timeline">
@@ -1166,7 +1167,12 @@ const Timeline = ({ bpm }) => {
                 className="beat"
                 style={{ width: beatWidth }}
               >
-                {beatIndex + 1}
+                <div className="beat-main">
+                  {beatIndex + 1}
+                </div>
+                <div className="beat-sub">
+                  <div className="sub-beat-marker">・</div>
+                </div>
               </div>
             ))}
           </div>
@@ -1192,9 +1198,13 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
       onDragOver={onDragOver}
     >
       <div className="track-grid">
-        {/* 拍の境界線を表示 */}
+        {/* 表拍（主要な拍）の境界線を表示 */}
         {Array.from({ length: 64 }, (_, index) => (
-          <div key={index} className="beat-line" style={{ left: index * 100 }} />
+          <div key={`main-${index}`} className="beat-line beat-line-main" style={{ left: index * 100 }} />
+        ))}
+        {/* 裏拍（8分音符）の境界線を表示 */}
+        {Array.from({ length: 64 }, (_, index) => (
+          <div key={`sub-${index}`} className="beat-line beat-line-sub" style={{ left: index * 100 + 50 }} />
         ))}
       </div>
       
