@@ -25,6 +25,7 @@ const DAWPage = () => {
   const [draggedClip, setDraggedClip] = useState(null);
   const [dragPreview, setDragPreview] = useState(null);
   const [draggedSoundDuration, setDraggedSoundDuration] = useState(400); // ドラッグ中の音素材の長さ
+  const [isExporting, setIsExporting] = useState(false); // 音源出力中フラグ
   const timelineRef = useRef(null);
   const animationFrameRef = useRef(null);
 
@@ -288,6 +289,262 @@ const DAWPage = () => {
     );
     
     setTracks(updatedTracks);
+  };
+
+  // プロジェクト保存機能
+  const saveProject = () => {
+    try {
+      const projectData = {
+        version: '1.0',
+        bpm: bpm,
+        tracks: tracks,
+        sounds: sounds.map(sound => ({
+          ...sound,
+          audioBlob: null, // Blobは別途保存
+          audioData: sound.audioData // base64データを保持
+        })),
+        timestamp: Date.now(),
+        trackNameCounter: trackNameCounterRef.current,
+        trackIdCounter: trackIdCounterRef.current
+      };
+
+      const projectJson = JSON.stringify(projectData, null, 2);
+      const blob = new Blob([projectJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `music-project-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      console.log('プロジェクトを保存しました');
+    } catch (error) {
+      console.error('プロジェクト保存エラー:', error);
+      setError('プロジェクトの保存に失敗しました。');
+    }
+  };
+
+  // プロジェクト読み込み機能
+  const loadProject = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const projectData = JSON.parse(e.target.result);
+        
+        // バージョンチェック
+        if (!projectData.version) {
+          throw new Error('不正なプロジェクトファイルです');
+        }
+
+        // 音声データ復元用のヘルパー関数
+        const restoreAudioBlob = (soundData) => {
+          if (soundData && soundData.audioData) {
+            try {
+              const byteCharacters = atob(soundData.audioData.split(',')[1]);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], { type: 'audio/wav' });
+              return { ...soundData, audioBlob: blob };
+            } catch (error) {
+              console.error('音声データの復元に失敗:', soundData.name || 'unknown', error);
+              return soundData;
+            }
+          }
+          return soundData;
+        };
+
+        // BPMを復元
+        setBpm(projectData.bpm || 120);
+        
+        // トラックを復元（クリップ内の音声データも復元）
+        if (projectData.tracks) {
+          const restoredTracks = projectData.tracks.map(track => ({
+            ...track,
+            clips: track.clips.map(clip => ({
+              ...clip,
+              soundData: restoreAudioBlob(clip.soundData)
+            }))
+          }));
+          setTracks(restoredTracks);
+          console.log('トラックデータを復元しました:', restoredTracks.length, 'トラック');
+        }
+        
+        // カウンターを復元
+        if (projectData.trackNameCounter) {
+          trackNameCounterRef.current = projectData.trackNameCounter;
+        }
+        if (projectData.trackIdCounter) {
+          trackIdCounterRef.current = projectData.trackIdCounter;
+        }
+        
+        // 音素材を復元
+        if (projectData.sounds) {
+          const restoredSounds = projectData.sounds.map(sound => restoreAudioBlob(sound));
+          setSounds(restoredSounds);
+          console.log('音素材を復元しました:', restoredSounds.length, '個');
+        }
+        
+        console.log('プロジェクトを読み込みました');
+        setError(null);
+      } catch (error) {
+        console.error('プロジェクト読み込みエラー:', error);
+        setError('プロジェクトファイルの読み込みに失敗しました。ファイルが正しいか確認してください。');
+      }
+    };
+    
+    reader.readAsText(file);
+    // ファイル選択をリセット
+    event.target.value = '';
+  };
+
+  // 音源出力機能
+  const exportAudio = async () => {
+    if (!audioContext) {
+      setError('AudioContextが初期化されていません。');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // 全トラックの全クリップの最大終了時間を計算
+      let maxDuration = 0;
+      tracks.forEach(track => {
+        track.clips.forEach(clip => {
+          const pixelsPerSecond = (bpm / 60) * 100;
+          const clipStartTimeInSeconds = clip.startTime / pixelsPerSecond;
+          const clipDurationInSeconds = clip.duration / pixelsPerSecond;
+          const clipEndTime = clipStartTimeInSeconds + clipDurationInSeconds;
+          maxDuration = Math.max(maxDuration, clipEndTime);
+        });
+      });
+
+      if (maxDuration === 0) {
+        setError('出力する音声がありません。音素材を配置してください。');
+        setIsExporting(false);
+        return;
+      }
+
+      // 出力用AudioContextを作成（44.1kHz）
+      const exportContext = new AudioContext({ sampleRate: 44100 });
+      const bufferLength = Math.ceil(maxDuration * exportContext.sampleRate);
+      const outputBuffer = exportContext.createBuffer(2, bufferLength, exportContext.sampleRate);
+      
+      const leftChannel = outputBuffer.getChannelData(0);
+      const rightChannel = outputBuffer.getChannelData(1);
+
+      // 各トラックの各クリップを処理
+      for (const track of tracks) {
+        for (const clip of track.clips) {
+          if (clip.soundData && clip.soundData.audioBlob) {
+            try {
+              const arrayBuffer = await clip.soundData.audioBlob.arrayBuffer();
+              const audioBuffer = await exportContext.decodeAudioData(arrayBuffer);
+              
+              const pixelsPerSecond = (bpm / 60) * 100;
+              const startTimeInSamples = Math.floor((clip.startTime / pixelsPerSecond) * exportContext.sampleRate);
+              
+              // 音声をミックス
+              for (let channel = 0; channel < Math.min(audioBuffer.numberOfChannels, 2); channel++) {
+                const sourceData = audioBuffer.getChannelData(channel);
+                const targetData = channel === 0 ? leftChannel : rightChannel;
+                
+                for (let i = 0; i < sourceData.length && (startTimeInSamples + i) < targetData.length; i++) {
+                  targetData[startTimeInSamples + i] += sourceData[i];
+                }
+              }
+              
+              // モノラル音源の場合は両チャンネルにコピー
+              if (audioBuffer.numberOfChannels === 1) {
+                const sourceData = audioBuffer.getChannelData(0);
+                for (let i = 0; i < sourceData.length && (startTimeInSamples + i) < rightChannel.length; i++) {
+                  rightChannel[startTimeInSamples + i] += sourceData[i];
+                }
+              }
+            } catch (error) {
+              console.error('クリップの処理エラー:', error);
+            }
+          }
+        }
+      }
+
+      // WAVファイルとして出力
+      const wavBlob = audioBufferToWav(outputBuffer);
+      const url = URL.createObjectURL(wavBlob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `exported-music-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.wav`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      console.log('音源を出力しました');
+      await exportContext.close();
+    } catch (error) {
+      console.error('音源出力エラー:', error);
+      setError('音源の出力に失敗しました。');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // AudioBufferをWAVファイルに変換
+  const audioBufferToWav = (buffer) => {
+    const length = buffer.length;
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bytesPerSample = 2;
+    const blockAlign = numberOfChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = length * blockAlign;
+    const bufferSize = 44 + dataSize;
+    
+    const arrayBuffer = new ArrayBuffer(bufferSize);
+    const view = new DataView(arrayBuffer);
+    
+    // WAVファイルヘッダー
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, bufferSize - 8, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bytesPerSample * 8, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataSize, true);
+    
+    // 音声データ
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = buffer.getChannelData(channel)[i];
+        const intSample = Math.max(-1, Math.min(1, sample)) * 0x7FFF;
+        view.setInt16(offset, intSample, true);
+        offset += 2;
+      }
+    }
+    
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
   };
 
   const addTrack = () => {
@@ -562,7 +819,37 @@ const DAWPage = () => {
         console.error('createObjectURL エラー:', error, 'audioBlob:', clip.soundData.audioBlob);
       }
     } else {
-      console.warn('audioBlobが無効です:', clip.soundData);
+      console.warn('audioBlobが無効です。クリップ情報:', {
+        clipId: clip.id,
+        soundDataName: clip.soundData?.name,
+        hasAudioData: !!clip.soundData?.audioData,
+        hasAudioBlob: !!clip.soundData?.audioBlob,
+        audioBlobType: typeof clip.soundData?.audioBlob,
+        isInstanceOfBlob: clip.soundData?.audioBlob instanceof Blob
+      });
+      
+      // AudioBlobが無効な場合、audioDataから復元を試行
+      if (clip.soundData && clip.soundData.audioData && !clip.soundData.audioBlob) {
+        console.log('audioDataからBlobを再作成中...');
+        try {
+          const byteCharacters = atob(clip.soundData.audioData.split(',')[1]);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'audio/wav' });
+          
+          // クリップのsoundDataを更新
+          clip.soundData.audioBlob = blob;
+          
+          // 再帰的に再試行
+          scheduleClipPlayback(clip, delayMs, playingAudiosMap);
+          return;
+        } catch (restoreError) {
+          console.error('audioDataからのBlob復元に失敗:', restoreError);
+        }
+      }
     }
   };
 
@@ -651,6 +938,28 @@ const DAWPage = () => {
             onClick={() => setShowSoundPanel(!showSoundPanel)}
           >
             {showSoundPanel ? '🎵 音素材を隠す' : '🎵 音素材を表示'}
+          </button>
+        </div>
+
+        <div className="project-controls">
+          <button className="button-secondary" onClick={saveProject}>
+            💾 プロジェクト保存
+          </button>
+          <label className="button-secondary file-input-label">
+            📁 プロジェクト読み込み
+            <input
+              type="file"
+              accept=".json"
+              onChange={loadProject}
+              style={{ display: 'none' }}
+            />
+          </label>
+          <button 
+            className="button-primary" 
+            onClick={exportAudio}
+            disabled={isExporting}
+          >
+            {isExporting ? '🔄 出力中...' : '🎧 音源出力'}
           </button>
         </div>
       </div>
@@ -746,6 +1055,9 @@ const DAWPage = () => {
           <li>▶️ボタンで再生、⏸️ボタンで一時停止、⏹️ボタンで停止</li>
           <li>BPMを変更して音楽の速さを調整</li>
           <li>トラックを追加して複数の音を重ねることができます</li>
+          <li><strong>💾 プロジェクト保存:</strong> 編集中のデータをJSONファイルとして保存</li>
+          <li><strong>📁 プロジェクト読み込み:</strong> 保存したプロジェクトファイルを読み込んで編集を再開</li>
+          <li><strong>🎧 音源出力:</strong> 完成した楽曲をWAVファイルとして出力</li>
         </ul>
       </div>
     </div>
