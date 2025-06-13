@@ -228,11 +228,11 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  min-width: 6400px;
 }
 
 .measure {
   border-right: 2px solid #ddd;
+  width: 400px;
   min-width: 400px;
 }
 
@@ -295,7 +295,6 @@
   position: relative;
   min-height: 500px;
   background: #fafafa;
-  min-width: 6400px;
   flex: 1;
 }
 
@@ -343,9 +342,18 @@
   z-index: 1;
 }
 
-.beat-line:nth-child(4n+1) {
-  background: #aaa;
+/* 小節の境界線を強調（表拍のみ） */
+.beat-line-main.measure-start {
+  background: #999;
   width: 2px;
+  z-index: 3;
+}
+
+/* 1小節目の開始線をさらに強調（表拍のみ） */
+.beat-line-main.first-beat {
+  background: #777;
+  width: 4px;
+  z-index: 4;
 }
 
 .audio-clip {

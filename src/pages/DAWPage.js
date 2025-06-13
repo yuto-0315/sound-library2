@@ -1,6 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './DAWPage.css';
 
+// DAWの定数
+const BEAT_WIDTH = 100; // 1拍の幅（px）
+const BEATS_PER_MEASURE = 4; // 1小節あたりの拍数
+const MEASURE_WIDTH = BEAT_WIDTH * BEATS_PER_MEASURE; // 1小節の幅（400px）
+const SUB_BEAT_WIDTH = BEAT_WIDTH / 2; // 8分音符の幅（50px）
+const TOTAL_MEASURES = 16; // 表示する小節数
+const TOTAL_BEATS = TOTAL_MEASURES * BEATS_PER_MEASURE; // 総拍数
+
 const DAWPage = () => {
   // ユニークID生成用のカウンター
   const trackIdCounterRef = useRef(1);
@@ -579,8 +587,7 @@ const DAWPage = () => {
     
     try {
       // 8分音符に合わせて位置を調整（50px単位）
-      const subBeatWidth = 50; // 8分音符の幅（px）
-      const snappedPosition = Math.round(timePosition / subBeatWidth) * subBeatWidth;
+      const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
       
       // 既存のクリップの移動かどうかチェック
       if (draggedClip) {
@@ -686,8 +693,7 @@ const DAWPage = () => {
     // ドラッグプレビューの更新
     const rect = e.currentTarget.getBoundingClientRect();
     const timePosition = e.clientX - rect.left;
-    const subBeatWidth = 50; // 8分音符の幅
-    const snappedPosition = Math.round(timePosition / subBeatWidth) * subBeatWidth;
+    const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
     
     const trackElement = e.currentTarget;
     const trackRect = trackElement.getBoundingClientRect();
@@ -994,7 +1000,7 @@ const DAWPage = () => {
               ) : (
                 <div className="no-sounds">
                   <p>音素材がありません</p>
-                  <p>「音を集める」ページで音を録音してください</p>
+                  <p>「音あつめ」ページで音を録音してください</p>
                 </div>
               )}
             </div>
@@ -1018,7 +1024,7 @@ const DAWPage = () => {
 
           <div className="timeline-container">
             <Timeline bpm={bpm} />
-            <div className="tracks-area" ref={timelineRef}>
+            <div className="tracks-area" ref={timelineRef} style={{ minWidth: TOTAL_MEASURES * MEASURE_WIDTH }}>
               <Playhead currentTime={currentTime} />
               {dragPreview && (
                 <div 
@@ -1154,12 +1160,11 @@ const TrackHeader = ({ track, onRemove, trackHeight }) => {
 };
 
 const Timeline = ({ bpm }) => {
-  const measures = 16; // 16小節表示
-  const beatsPerMeasure = 4; // 4/4拍子
-  const beatWidth = 100; // 1拍の幅
+  const measures = TOTAL_MEASURES; // 16小節表示
+  const beatsPerMeasure = BEATS_PER_MEASURE; // 4/4拍子
 
   return (
-    <div className="timeline">
+    <div className="timeline" style={{ minWidth: TOTAL_MEASURES * MEASURE_WIDTH }}>
       {Array.from({ length: measures }, (_, measureIndex) => (
         <div key={measureIndex} className="measure">
           <div className="measure-number">{measureIndex + 1}</div>
@@ -1168,7 +1173,7 @@ const Timeline = ({ bpm }) => {
               <div 
                 key={beatIndex} 
                 className="beat"
-                style={{ width: beatWidth }}
+                style={{ width: BEAT_WIDTH }}
               >
                 <div className="beat-main">
                   {beatIndex + 1}
@@ -1202,12 +1207,17 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
     >
       <div className="track-grid">
         {/* 表拍（主要な拍）の境界線を表示 */}
-        {Array.from({ length: 64 }, (_, index) => (
-          <div key={`main-${index}`} className="beat-line beat-line-main" style={{ left: index * 100 }} />
-        ))}
+        {Array.from({ length: TOTAL_BEATS }, (_, index) => {
+          const isFirstBeat = index === 0;
+          const isMeasureStart = index % BEATS_PER_MEASURE === 0;
+          const className = `beat-line beat-line-main ${isFirstBeat ? 'first-beat' : ''} ${isMeasureStart ? 'measure-start' : ''}`;
+          return (
+            <div key={`main-${index}`} className={className} style={{ left: index * BEAT_WIDTH }} />
+          );
+        })}
         {/* 裏拍（8分音符）の境界線を表示 */}
-        {Array.from({ length: 64 }, (_, index) => (
-          <div key={`sub-${index}`} className="beat-line beat-line-sub" style={{ left: index * 100 + 50 }} />
+        {Array.from({ length: TOTAL_BEATS }, (_, index) => (
+          <div key={`sub-${index}`} className="beat-line beat-line-sub" style={{ left: index * BEAT_WIDTH + SUB_BEAT_WIDTH }} />
         ))}
       </div>
       
