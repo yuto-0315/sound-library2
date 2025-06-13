@@ -254,6 +254,7 @@ const DAWPage = () => {
       }
       setStartPlayTime(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, bpm, currentTime]);
 
   // startPlayTimeが設定されたときにアニメーションを開始
@@ -1153,7 +1154,6 @@ const Timeline = ({ bpm }) => {
   const measures = 16; // 16小節表示
   const beatsPerMeasure = 4; // 4/4拍子
   const beatWidth = 100; // 1拍の幅
-  const subBeatWidth = beatWidth / 2; // 8分音符（裏拍）の幅
 
   return (
     <div className="timeline">

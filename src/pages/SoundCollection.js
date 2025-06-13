@@ -59,17 +59,6 @@ const SoundCollection = () => {
     });
   };
 
-  // Base64 を Blob に変換する関数
-  const base64ToBlob = (base64, mimeType) => {
-    const byteCharacters = atob(base64.split(',')[1]);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    return new Blob([byteArray], { type: mimeType });
-  };
-
   const saveRecording = async (name, tags) => {
     if (currentRecording && name.trim()) {
       try {
