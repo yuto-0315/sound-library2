@@ -2,7 +2,16 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './DAWPage.css';
 
 const DAWPage = () => {
-  const [tracks, setTracks] = useState([{ id: 1, name: 'トラック 1', clips: [] }]);
+  // ユニークID生成用のカウンター
+  const trackIdCounterRef = useRef(1);
+  // トラック名の番号管理用カウンター
+  const trackNameCounterRef = useRef(1);
+  
+  const [tracks, setTracks] = useState(() => [{ 
+    id: Date.now(), 
+    name: 'トラック 1', 
+    clips: [] 
+  }]);
   const [bpm, setBpm] = useState(120);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -15,6 +24,7 @@ const DAWPage = () => {
   const [showSoundPanel, setShowSoundPanel] = useState(true);
   const [draggedClip, setDraggedClip] = useState(null);
   const [dragPreview, setDragPreview] = useState(null);
+  const [draggedSoundDuration, setDraggedSoundDuration] = useState(400); // ドラッグ中の音素材の長さ
   const timelineRef = useRef(null);
   const animationFrameRef = useRef(null);
 
@@ -25,11 +35,13 @@ const DAWPage = () => {
     
     // LocalStorageから音素材を読み込み
     const savedSounds = JSON.parse(localStorage.getItem('soundRecordings') || '[]');
+    console.log('LocalStorageから読み込んだ音素材数:', savedSounds.length);
     
     // audioDataからBlobを復元
     const soundsWithBlob = savedSounds.map(sound => {
       if (sound.audioData) {
         try {
+          console.log('音声データ復元中:', sound.name, 'データサイズ:', sound.audioData.length);
           const byteCharacters = atob(sound.audioData.split(',')[1]);
           const byteNumbers = new Array(byteCharacters.length);
           for (let i = 0; i < byteCharacters.length; i++) {
@@ -37,9 +49,10 @@ const DAWPage = () => {
           }
           const byteArray = new Uint8Array(byteNumbers);
           const blob = new Blob([byteArray], { type: 'audio/wav' });
+          console.log('Blob復元成功:', sound.name, 'サイズ:', blob.size, 'タイプ:', blob.type);
           return { ...sound, audioBlob: blob };
         } catch (error) {
-          console.error('音声データの復元に失敗:', error);
+          console.error('音声データの復元に失敗:', sound.name, error);
           return sound;
         }
       }
@@ -62,74 +75,233 @@ const DAWPage = () => {
     };
   }, []);
 
-  // 音声ファイルの継続時間を取得
-  const getAudioDuration = (audioBlob) => {
-    return new Promise((resolve) => {
-      const audio = new Audio();
-      audio.addEventListener('loadedmetadata', () => {
-        const duration = audio.duration;
-        // 有効な数値かチェック（NaN、Infinity、負の値を除外）
-        if (isFinite(duration) && duration > 0) {
-          resolve(duration * 100); // 秒からピクセルに変換（1秒=100px）
-        } else {
-          resolve(200); // 無効な値の場合はデフォルト値
+  // 音声ファイルの継続時間を取得してピクセル幅に変換
+  const getAudioDuration = (audioBlob, currentBpm = bpm) => {
+    return new Promise(async (resolve) => {
+      if (!audioBlob || !(audioBlob instanceof Blob)) {
+        console.log('無効なaudioBlob - デフォルト値を使用');
+        resolve(400);
+        return;
+      }
+
+      console.log('audioBlob詳細:', {
+        size: audioBlob.size,
+        type: audioBlob.type,
+        bpm: currentBpm
+      });
+
+      // AudioContextを使用した方法を試す
+      if (audioContext) {
+        try {
+          console.log('AudioContext方式で音声長さを取得中...');
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          const durationInSeconds = audioBuffer.duration;
+          
+          console.log('AudioContext方式で取得した長さ:', durationInSeconds, '秒');
+          
+          if (isFinite(durationInSeconds) && durationInSeconds > 0) {
+            const pixelsPerSecond = (currentBpm / 60) * 100;
+            const widthInPixels = durationInSeconds * pixelsPerSecond;
+            console.log('AudioContext計算結果 - BPM:', currentBpm, '拍/秒:', currentBpm/60, 'ピクセル/秒:', pixelsPerSecond, '最終幅:', widthInPixels, 'px');
+            resolve(widthInPixels);
+            return;
+          }
+        } catch (error) {
+          console.log('AudioContext方式でエラー、HTML Audio方式にフォールバック:', error);
         }
-        // URLを解放してメモリリークを防ぐ
+      }
+
+      // HTML Audio方式（フォールバック）
+      const audio = new Audio();
+      
+      const handleLoadedMetadata = () => {
+        const durationInSeconds = audio.duration;
+        console.log('HTML Audio方式で取得した長さ:', durationInSeconds, '秒');
+        console.log('音声ファイルの詳細情報:', {
+          duration: durationInSeconds,
+          readyState: audio.readyState,
+          networkState: audio.networkState,
+          currentTime: audio.currentTime,
+          paused: audio.paused,
+          ended: audio.ended
+        });
+        
+        // URLをクリーンアップ
         URL.revokeObjectURL(audio.src);
-      });
-      audio.addEventListener('error', () => {
-        resolve(200); // エラーの場合はデフォルト値
-        // URLを解放してメモリリークを防ぐ
+        
+        // 有効な数値かチェック（NaN、Infinity、負の値を除外）
+        if (isFinite(durationInSeconds) && durationInSeconds > 0) {
+          // BPMに基づいてピクセル幅を計算
+          // 1拍 = 100px, 1小節 = 4拍 = 400px
+          // 1秒あたりの拍数 = BPM / 60
+          // 1秒あたりのピクセル数 = (BPM / 60) * 100
+          const pixelsPerSecond = (currentBpm / 60) * 100;
+          const widthInPixels = durationInSeconds * pixelsPerSecond;
+          console.log('HTML Audio計算結果 - BPM:', currentBpm, '拍/秒:', currentBpm/60, 'ピクセル/秒:', pixelsPerSecond, '最終幅:', widthInPixels, 'px');
+          resolve(widthInPixels);
+        } else {
+          // デフォルト値（1小節 = 400px）
+          console.log('無効な音声長さのためデフォルト値を使用:', durationInSeconds);
+          resolve(400);
+        }
+      };
+      
+      const handleError = (event) => {
+        console.log('音声ファイルの読み込みエラー - デフォルト値を使用', event);
+        console.log('エラー詳細:', {
+          error: audio.error,
+          networkState: audio.networkState,
+          readyState: audio.readyState
+        });
         URL.revokeObjectURL(audio.src);
+        resolve(400);
+      };
+      
+      const handleCanPlayThrough = () => {
+        console.log('canplaythrough イベント発生 - duration:', audio.duration);
+      };
+      
+      // タイムアウト処理を追加（10秒でタイムアウト）
+      const timeoutId = setTimeout(() => {
+        console.log('音声ファイルの読み込みタイムアウト - デフォルト値を使用');
+        console.log('タイムアウト時の状態:', {
+          duration: audio.duration,
+          readyState: audio.readyState,
+          networkState: audio.networkState
+        });
+        audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.removeEventListener('error', handleError);
+        audio.removeEventListener('canplaythrough', handleCanPlayThrough);
+        URL.revokeObjectURL(audio.src);
+        resolve(400);
+      }, 10000);
+      
+      audio.addEventListener('loadedmetadata', () => {
+        console.log('loadedmetadata イベント発生');
+        clearTimeout(timeoutId);
+        handleLoadedMetadata();
       });
-      audio.src = URL.createObjectURL(audioBlob);
+      audio.addEventListener('error', (event) => {
+        console.log('error イベント発生');
+        clearTimeout(timeoutId);
+        handleError(event);
+      });
+      audio.addEventListener('canplaythrough', handleCanPlayThrough);
+      
+      try {
+        const objectUrl = URL.createObjectURL(audioBlob);
+        console.log('ObjectURL作成成功:', objectUrl);
+        audio.src = objectUrl;
+        
+        // 手動でloadを呼び出し
+        audio.load();
+      } catch (error) {
+        console.error('createObjectURL エラー:', error);
+        clearTimeout(timeoutId);
+        resolve(400);
+      }
     });
   };
 
   // プレイヘッドのアニメーション更新
   const updatePlayhead = useCallback(() => {
-    if (isPlaying && startPlayTime) {
-      const elapsed = (Date.now() - startPlayTime) / 1000; // 経過時間（秒）
-      const pixelsPerSecond = (bpm / 60) * 100; // BPMに基づいたピクセル/秒
-      const newCurrentTime = elapsed * pixelsPerSecond;
-      
-      // 有効な数値かチェック
-      if (isFinite(newCurrentTime) && newCurrentTime >= 0) {
-        setCurrentTime(newCurrentTime);
-      } else {
-        console.warn('無効なcurrentTime:', newCurrentTime, 'elapsed:', elapsed, 'pixelsPerSecond:', pixelsPerSecond);
+    const animate = () => {
+      if (isPlaying && startPlayTime) {
+        const elapsed = (Date.now() - startPlayTime) / 1000; // 経過時間（秒）
+        const pixelsPerSecond = (bpm / 60) * 100; // BPMに基づいたピクセル/秒
+        const newCurrentTime = elapsed * pixelsPerSecond;
+        
+        // 有効な数値かチェック
+        if (isFinite(newCurrentTime) && newCurrentTime >= 0) {
+          setCurrentTime(newCurrentTime);
+        } else {
+          console.warn('無効なcurrentTime:', newCurrentTime, 'elapsed:', elapsed, 'pixelsPerSecond:', pixelsPerSecond);
+        }
+        
+        // 次のフレームを要求
+        animationFrameRef.current = requestAnimationFrame(animate);
       }
-      
-      animationFrameRef.current = requestAnimationFrame(updatePlayhead);
+    };
+    
+    if (isPlaying && startPlayTime) {
+      animate();
     }
   }, [isPlaying, startPlayTime, bpm]);
 
   useEffect(() => {
     if (isPlaying) {
-      const pixelsPerSecond = (bpm / 60) * 100;
-      // 有効な数値かチェック
-      if (isFinite(pixelsPerSecond) && pixelsPerSecond > 0) {
-        const timeInSeconds = currentTime / pixelsPerSecond;
-        if (isFinite(timeInSeconds) && timeInSeconds >= 0) {
-          setStartPlayTime(Date.now() - (timeInSeconds * 1000));
+      if (!startPlayTime) {
+        // 再生開始時にstartPlayTimeを設定
+        const pixelsPerSecond = (bpm / 60) * 100;
+        if (isFinite(pixelsPerSecond) && pixelsPerSecond > 0) {
+          const timeInSeconds = currentTime / pixelsPerSecond;
+          if (isFinite(timeInSeconds) && timeInSeconds >= 0) {
+            setStartPlayTime(Date.now() - (timeInSeconds * 1000));
+          } else {
+            setStartPlayTime(Date.now());
+          }
         } else {
           setStartPlayTime(Date.now());
         }
-      } else {
-        setStartPlayTime(Date.now());
       }
-      updatePlayhead();
     } else {
+      // 再生停止時にアニメーションをクリア
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
+      setStartPlayTime(null);
     }
-  }, [isPlaying, bpm, currentTime, updatePlayhead]);
+  }, [isPlaying, bpm, currentTime]);
+
+  // startPlayTimeが設定されたときにアニメーションを開始
+  useEffect(() => {
+    if (isPlaying && startPlayTime) {
+      updatePlayhead();
+    }
+  }, [isPlaying, startPlayTime, updatePlayhead]);
+
+  // BPM変更時のハンドラー
+  const handleBpmChange = async (newBpm) => {
+    setBpm(newBpm);
+    
+    // 既存のクリップのdurationを新しいBPMで再計算
+    const updatedTracks = await Promise.all(
+      tracks.map(async (track) => {
+        const updatedClips = await Promise.all(
+          track.clips.map(async (clip) => {
+            if (clip.soundData && clip.soundData.audioBlob) {
+              try {
+                const newDuration = await getAudioDuration(clip.soundData.audioBlob, newBpm);
+                return { ...clip, duration: newDuration };
+              } catch (error) {
+                console.warn('クリップのduration更新に失敗:', error);
+                return clip;
+              }
+            }
+            return clip;
+          })
+        );
+        return { ...track, clips: updatedClips };
+      })
+    );
+    
+    setTracks(updatedTracks);
+  };
 
   const addTrack = () => {
+    // より確実にユニークなIDを生成
+    trackIdCounterRef.current += 1;
+    const uniqueId = Date.now() + trackIdCounterRef.current;
+    
+    // トラック名の番号を増加（削除されても番号は戻らない）
+    trackNameCounterRef.current += 1;
+    const trackName = `トラック ${trackNameCounterRef.current}`;
+    
     const newTrack = {
-      id: tracks.length + 1,
-      name: `トラック ${tracks.length + 1}`,
+      id: uniqueId,
+      name: trackName,
       clips: []
     };
     setTracks([...tracks, newTrack]);
@@ -205,12 +377,12 @@ const DAWPage = () => {
       
       console.log('新しい音素材のドロップ:', { soundData, hasAudioBlob: !!soundData.audioBlob });
       
-      // 音声の実際の継続時間を取得
-      let duration = 200; // デフォルト値
+      // 音声の実際の継続時間を取得（現在のBPMに基づいて）
+      let duration = 400; // デフォルト値（1小節）
       if (soundData.audioBlob) {
         try {
-          duration = await getAudioDuration(soundData.audioBlob);
-          console.log('取得したduration:', duration);
+          duration = await getAudioDuration(soundData.audioBlob, bpm);
+          console.log('取得したduration:', duration, 'pixels (BPM:', bpm, ')');
         } catch (error) {
           console.warn('音声継続時間の取得に失敗しました:', error);
         }
@@ -219,7 +391,7 @@ const DAWPage = () => {
       // durationが有効な値かチェック
       if (!isFinite(duration) || duration <= 0) {
         console.warn('無効なduration:', duration, 'デフォルト値を使用');
-        duration = 200;
+        duration = 400; // 1小節分
       }
 
       const newClip = {
@@ -267,10 +439,18 @@ const DAWPage = () => {
       const relativeTop = trackRect.top - tracksAreaRect.top;
       const trackId = parseInt(trackElement.dataset.trackId);
       
-      // durationが有効な値かチェック
-      const previewWidth = draggedClip && isFinite(draggedClip.duration) && draggedClip.duration > 0 
-        ? draggedClip.duration 
-        : 200;
+      // プレビュー幅を決定
+      let previewWidth = 400; // デフォルト値（1小節）
+      
+      if (draggedClip) {
+        // 既存クリップの場合
+        previewWidth = isFinite(draggedClip.duration) && draggedClip.duration > 0 
+          ? draggedClip.duration 
+          : 400;
+      } else {
+        // 新しい音素材の場合、事前に計算された長さを使用
+        previewWidth = draggedSoundDuration;
+      }
       
       setDragPreview({
         left: snappedPosition,
@@ -303,6 +483,7 @@ const DAWPage = () => {
     }
     setDraggedClip(null);
     setDragPreview(null);
+    setDraggedSoundDuration(400); // リセット
   };
 
   const play = async () => {
@@ -454,7 +635,7 @@ const DAWPage = () => {
             id="bpm"
             type="number"
             value={bpm}
-            onChange={(e) => setBpm(parseInt(e.target.value))}
+            onChange={(e) => handleBpmChange(parseInt(e.target.value))}
             min="60"
             max="200"
             className="bpm-input"
@@ -481,7 +662,24 @@ const DAWPage = () => {
             <div className="sound-list">
               {sounds.length > 0 ? (
                 sounds.map(sound => (
-                  <SoundItem key={sound.id} sound={sound} />
+                  <SoundItem 
+                    key={sound.id} 
+                    sound={sound} 
+                    onDragStart={async (sound) => {
+                      // ドラッグ開始時に音声の長さを計算
+                      if (sound.audioBlob) {
+                        try {
+                          const duration = await getAudioDuration(sound.audioBlob, bpm);
+                          setDraggedSoundDuration(duration);
+                        } catch (error) {
+                          console.warn('ドラッグ時の音声長さ計算に失敗:', error);
+                          setDraggedSoundDuration(400);
+                        }
+                      } else {
+                        setDraggedSoundDuration(400);
+                      }
+                    }}
+                  />
                 ))
               ) : (
                 <div className="no-sounds">
@@ -554,7 +752,7 @@ const DAWPage = () => {
   );
 };
 
-const SoundItem = ({ sound }) => {
+const SoundItem = ({ sound, onDragStart }) => {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handleDragStart = (e) => {
@@ -569,6 +767,11 @@ const SoundItem = ({ sound }) => {
     
     // 実際のaudioBlobは別途グローバル変数で保持
     window.currentDraggedSoundBlob = sound.audioBlob;
+    
+    // 親コンポーネントのonDragStart関数を呼び出し（音声の長さを計算）
+    if (onDragStart) {
+      onDragStart(sound);
+    }
   };
 
   const playSound = () => {
@@ -733,7 +936,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
       onDragEnd={onDragEnd}
       style={{
         left: clip.startTime,
-        width: isFinite(clip.duration) && clip.duration > 0 ? clip.duration : 200
+        width: isFinite(clip.duration) && clip.duration > 0 ? clip.duration : 400 // デフォルト1小節
       }}
     >
       <div className="clip-header">
