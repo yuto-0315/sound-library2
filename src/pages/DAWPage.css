@@ -569,6 +569,7 @@
   .sound-item {
     padding: 20px; /* タッチしやすくするため大きくする */
     margin-bottom: 15px;
+    touch-action: manipulation; /* スクロールとズームのみ許可 */
   }
   
   .play-sound-btn {
@@ -579,12 +580,23 @@
   
   .audio-clip {
     min-height: 50px; /* タッチしやすくする */
+    touch-action: manipulation; /* スクロールとズームのみ許可 */
   }
   
   .remove-clip-btn {
     width: 30px;
     height: 30px;
     font-size: 16px;
+  }
+  
+  .track {
+    touch-action: manipulation; /* スクロールとズームのみ許可 */
+  }
+  
+  /* ドラッグ中はスクロールを完全に無効化 */
+  .sound-item.dragging,
+  .audio-clip.dragging {
+    touch-action: none;
   }
   
   /* 長押しによる選択を無効化 */
@@ -601,6 +613,12 @@
   body {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: none;
+  }
+  
+  /* ドラッグ中はbodyのスクロールを無効化 */
+  body.dragging {
+    overflow: hidden;
+    touch-action: none;
   }
 }
 

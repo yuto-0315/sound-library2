@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/sound-library2/static/css/main.e837d7d6.css",
-    "main.js": "/sound-library2/static/js/main.c770d3fb.js",
+    "main.css": "/sound-library2/static/css/main.6945e0db.css",
+    "main.js": "/sound-library2/static/js/main.f491c299.js",
     "index.html": "/sound-library2/index.html",
-    "main.e837d7d6.css.map": "/sound-library2/static/css/main.e837d7d6.css.map",
-    "main.c770d3fb.js.map": "/sound-library2/static/js/main.c770d3fb.js.map"
+    "main.6945e0db.css.map": "/sound-library2/static/css/main.6945e0db.css.map",
+    "main.f491c299.js.map": "/sound-library2/static/js/main.f491c299.js.map"
   },
   "entrypoints": [
-    "static/css/main.e837d7d6.css",
-    "static/js/main.c770d3fb.js"
+    "static/css/main.6945e0db.css",
+    "static/js/main.f491c299.js"
   ]
 }

@@ -140,7 +140,7 @@ const DAWPage = () => {
         URL.revokeObjectURL(audio.src);
         
         // 有効な数値かチェック（NaN、Infinity、負の値を除外）
-        if (isFinite(durationInSeconds) && durationInSeconds > 0) {
+        if (isFinite(durationInSeconds) && durationInSeconds > 0 && durationInSeconds !== Infinity) {
           // BPMに基づいてピクセル幅を計算
           // 1拍 = 100px, 1小節 = 4拍 = 400px
           // 1秒あたりの拍数 = BPM / 60
@@ -632,13 +632,35 @@ const DAWPage = () => {
       }
       
       // 新しい音素材の配置
-      const soundData = JSON.parse(e.dataTransfer.getData('application/json'));
+      let soundData;
+      try {
+        // dataTransferからデータを取得
+        const jsonData = e.dataTransfer ? e.dataTransfer.getData('application/json') : '';
+        if (jsonData) {
+          soundData = JSON.parse(jsonData);
+        } else {
+          // モバイルの場合はグローバル変数から取得
+          soundData = window.currentDraggedSound;
+        }
+      } catch (error) {
+        console.error('ドラッグデータの取得に失敗:', error);
+        soundData = window.currentDraggedSound; // フォールバック
+      }
+      
+      if (!soundData) {
+        console.error('音素材データが見つかりません');
+        setError('音素材データが見つかりません。再度お試しください。');
+        return;
+      }
       
       // グローバル変数からaudioBlobを復元
       if (window.currentDraggedSoundBlob) {
         soundData.audioBlob = window.currentDraggedSoundBlob;
         window.currentDraggedSoundBlob = null; // クリーンアップ
       }
+      
+      // グローバル変数をクリア
+      window.currentDraggedSound = null;
       
       console.log('新しい音素材のドロップ:', { soundData, hasAudioBlob: !!soundData.audioBlob });
       
@@ -1115,13 +1137,13 @@ const SoundItem = ({ sound, onDragStart }) => {
     setTouchStart({ x: touch.clientX, y: touch.clientY });
     setIsDragging(false);
     
-    // スクロールを一時的に無効化
-    document.body.style.overflow = 'hidden';
-    
     // 長押し判定用のタイマー
     setTimeout(() => {
       if (touchStart && !isDragging) {
         setIsDragging(true);
+        // スクロールを一時的に無効化
+        document.body.classList.add('dragging');
+        
         // 親コンポーネントのonDragStart関数を呼び出し
         if (onDragStart) {
           onDragStart(sound);
@@ -1156,7 +1178,7 @@ const SoundItem = ({ sound, onDragStart }) => {
     }
     
     if (isDragging) {
-      e.preventDefault(); // スクロールを防止
+      // passiveイベントではpreventDefaultが使えないので、代わりにtouchActionでスクロールを制御
       
       // ドラッグプレビューの位置を更新
       const dragPreview = document.querySelector('.mobile-drag-preview');
@@ -1208,7 +1230,7 @@ const SoundItem = ({ sound, onDragStart }) => {
     setTouchStart(null);
     setTouchMove(null);
     setIsDragging(false);
-    document.body.style.overflow = '';
+    document.body.classList.remove('dragging');
     
     // ハイライトを削除
     document.querySelectorAll('.track').forEach(track => {
@@ -1490,8 +1512,8 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     setTouchStart({ x: touch.clientX, y: touch.clientY });
     setIsDragging(false);
     
-    // スクロールを一時的に無効化
-    document.body.style.overflow = 'hidden';
+    // ドラッグモードを有効化
+    document.body.classList.add('dragging');
   };
 
   const handleTouchMove = (e) => {
@@ -1511,7 +1533,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     }
     
     if (isDragging) {
-      e.preventDefault(); // スクロールを防止
+      // passiveイベントではpreventDefaultが使えないので、touchActionで制御
       
       // ドロップターゲットのハイライト
       const elementBelow = document.elementFromPoint(currentPos.x, currentPos.y);
@@ -1557,7 +1579,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     setTouchStart(null);
     setTouchMove(null);
     setIsDragging(false);
-    document.body.style.overflow = '';
+    document.body.classList.remove('dragging');
     
     // ハイライトを削除
     document.querySelectorAll('.track').forEach(track => {
