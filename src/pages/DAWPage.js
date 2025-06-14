@@ -659,9 +659,11 @@ const DAWPage = () => {
         previewWidth = isFinite(draggedClip.duration) && draggedClip.duration > 0 
           ? draggedClip.duration 
           : 400;
+        console.log('既存クリップのプレビュー幅:', previewWidth);
       } else {
         // 新しい音素材の場合、事前に計算された長さを使用
         previewWidth = draggedSoundDuration;
+        console.log('新しい音素材のプレビュー幅:', previewWidth, '(draggedSoundDuration)');
       }
       
       setDragPreview({
@@ -922,7 +924,16 @@ const DAWPage = () => {
       <div className="daw-main-area">
         {showSoundPanel && (
           <div className="sound-panel">
-            <h3>🎵 音素材</h3>
+            <div className="sound-panel-header">
+              <h3>🎵 音素材</h3>
+              <button 
+                className="sound-panel-close"
+                onClick={() => setShowSoundPanel(false)}
+                title="音素材パネルを閉じる"
+              >
+                ✕
+              </button>
+            </div>
             <div className="sound-list">
               {sounds.length > 0 ? (
                 sounds.map(sound => (
@@ -931,15 +942,18 @@ const DAWPage = () => {
                     sound={sound} 
                     onDragStart={async (sound) => {
                       // ドラッグ開始時に音声の長さを計算
+                      console.log('ドラッグ開始 - 音声長さ計算中:', sound.name);
                       if (sound.audioBlob) {
                         try {
                           const duration = await getAudioDuration(sound.audioBlob, bpm);
+                          console.log('計算された音声長さ:', duration, 'px');
                           setDraggedSoundDuration(duration);
                         } catch (error) {
                           console.warn('ドラッグ時の音声長さ計算に失敗:', error);
                           setDraggedSoundDuration(400);
                         }
                       } else {
+                        console.log('audioBlob が存在しません - デフォルト値使用');
                         setDraggedSoundDuration(400);
                       }
                     }}
@@ -1192,7 +1206,7 @@ const SoundItem = ({ sound, onDragStart }) => {
   };
 
   // ドラッグプレビューを作成
-  const createDragPreview = () => {
+  const createDragPreview = useCallback(() => {
     if (isDragging && touchMove) {
       let dragPreview = document.querySelector('.mobile-drag-preview');
       if (!dragPreview) {
@@ -1214,14 +1228,14 @@ const SoundItem = ({ sound, onDragStart }) => {
         document.body.appendChild(dragPreview);
       }
     }
-  };
+  }, [isDragging, touchMove, sound.name]);
 
   // ドラッグプレビューの更新
   React.useEffect(() => {
     if (isDragging) {
       createDragPreview();
     }
-  }, [isDragging, touchMove]);
+  }, [isDragging, touchMove, createDragPreview]);
 
   return (
     <div
@@ -1311,7 +1325,7 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
   };
 
   // モバイルドロップイベントの処理
-  const handleMobileDrop = (e) => {
+  const handleMobileDrop = useCallback((e) => {
     const { trackId, timePosition, sound } = e.detail;
     
     // 模擬的なドロップイベントを作成
@@ -1328,11 +1342,11 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
     };
     
     onDrop(mockDropEvent, trackId, timePosition);
-  };
+  }, [onDrop]);
 
   // モバイルクリップ移動イベントの処理
-  const handleMobileClipMove = (e) => {
-    const { clip, originalTrackId, newTrackId, timePosition } = e.detail;
+  const handleMobileClipMove = useCallback((e) => {
+    const { clip, newTrackId, timePosition } = e.detail;
     
     // 模擬的なドロップイベントを作成
     const mockDropEvent = {
@@ -1348,7 +1362,7 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
     };
     
     onDrop(mockDropEvent, newTrackId, timePosition);
-  };
+  }, [onDrop]);
 
   React.useEffect(() => {
     const trackElement = document.querySelector(`[data-track-id="${track.id}"]`);
@@ -1360,7 +1374,7 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
         trackElement.removeEventListener('mobileClipMove', handleMobileClipMove);
       };
     }
-  }, [track.id]);
+  }, [track.id, handleMobileDrop, handleMobileClipMove]);
 
   return (
     <div 
