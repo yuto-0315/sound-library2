@@ -1057,7 +1057,8 @@ const DAWPage = () => {
       <div className="instructions card">
         <h3>📖 使い方</h3>
         <ul>
-          <li>左側の音素材パネルから音素材をトラックにドラッグ&ドロップして配置</li>
+          <li><strong>🖥️ PC:</strong> 左側の音素材パネルから音素材をトラックにドラッグ&ドロップして配置</li>
+          <li><strong>📱 スマホ/タブレット:</strong> 音素材を長押ししてからトラックまでドラッグして配置</li>
           <li>配置済みの音素材もドラッグして別の場所に移動できます</li>
           <li>ドラッグ中は配置予定位置に青い影が表示されます</li>
           <li>音素材は8分音符（裏拍含む）に合わせて自動的に配置されます</li>
@@ -1069,6 +1070,15 @@ const DAWPage = () => {
           <li><strong>📁 プロジェクト読み込み:</strong> 保存したプロジェクトファイルを読み込んで編集を再開</li>
           <li><strong>🎧 音源出力:</strong> 完成した楽曲をWAVファイルとして出力</li>
         </ul>
+        <div className="mobile-tips">
+          <h4>📱 スマートフォン利用のコツ</h4>
+          <ul>
+            <li>音素材を軽く長押しするとドラッグモードになります</li>
+            <li>ドラッグ中は画面がスクロールしないよう制御されます</li>
+            <li>青くハイライトされたトラックで指を離すと音素材が配置されます</li>
+            <li>横画面表示にするとより使いやすくなります</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
@@ -1076,6 +1086,9 @@ const DAWPage = () => {
 
 const SoundItem = ({ sound, onDragStart }) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchMove, setTouchMove] = useState(null);
 
   const handleDragStart = (e) => {
     // audioBlob以外のデータをJSON文字列として設定
@@ -1096,8 +1109,125 @@ const SoundItem = ({ sound, onDragStart }) => {
     }
   };
 
+  // タッチイベント対応
+  const handleTouchStart = (e) => {
+    const touch = e.touches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
+    setIsDragging(false);
+    
+    // スクロールを一時的に無効化
+    document.body.style.overflow = 'hidden';
+    
+    // 長押し判定用のタイマー
+    setTimeout(() => {
+      if (touchStart && !isDragging) {
+        setIsDragging(true);
+        // 親コンポーネントのonDragStart関数を呼び出し
+        if (onDragStart) {
+          onDragStart(sound);
+        }
+        // グローバル変数に設定
+        window.currentDraggedSoundBlob = sound.audioBlob;
+        window.currentDraggedSound = sound;
+      }
+    }, 200); // 200ms長押しで開始
+  };
+
+  const handleTouchMove = (e) => {
+    if (!touchStart) return;
+    
+    const touch = e.touches[0];
+    const currentPos = { x: touch.clientX, y: touch.clientY };
+    setTouchMove(currentPos);
+    
+    // ドラッグ開始の判定（10px以上移動）
+    const deltaX = Math.abs(currentPos.x - touchStart.x);
+    const deltaY = Math.abs(currentPos.y - touchStart.y);
+    
+    if (!isDragging && (deltaX > 10 || deltaY > 10)) {
+      setIsDragging(true);
+      // 親コンポーネントのonDragStart関数を呼び出し
+      if (onDragStart) {
+        onDragStart(sound);
+      }
+      // グローバル変数に設定
+      window.currentDraggedSoundBlob = sound.audioBlob;
+      window.currentDraggedSound = sound;
+    }
+    
+    if (isDragging) {
+      e.preventDefault(); // スクロールを防止
+      
+      // ドラッグプレビューの位置を更新
+      const dragPreview = document.querySelector('.mobile-drag-preview');
+      if (dragPreview) {
+        dragPreview.style.left = `${currentPos.x - 50}px`;
+        dragPreview.style.top = `${currentPos.y - 20}px`;
+      }
+      
+      // ドロップターゲットのハイライト
+      const elementBelow = document.elementFromPoint(currentPos.x, currentPos.y);
+      const trackElement = elementBelow?.closest('.track');
+      
+      // 既存のハイライトを削除
+      document.querySelectorAll('.track').forEach(track => {
+        track.classList.remove('drag-over');
+      });
+      
+      // 新しいハイライトを追加
+      if (trackElement) {
+        trackElement.classList.add('drag-over');
+      }
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (isDragging && touchMove) {
+      // ドロップ処理
+      const elementBelow = document.elementFromPoint(touchMove.x, touchMove.y);
+      const trackElement = elementBelow?.closest('.track');
+      
+      if (trackElement) {
+        const trackId = parseInt(trackElement.dataset.trackId);
+        const rect = trackElement.getBoundingClientRect();
+        const timePosition = touchMove.x - rect.left;
+        
+        // ドロップイベントを発火
+        const dropEvent = new CustomEvent('mobileDrop', {
+          detail: {
+            trackId,
+            timePosition,
+            sound: sound
+          }
+        });
+        trackElement.dispatchEvent(dropEvent);
+      }
+    }
+    
+    // クリーンアップ
+    setTouchStart(null);
+    setTouchMove(null);
+    setIsDragging(false);
+    document.body.style.overflow = '';
+    
+    // ハイライトを削除
+    document.querySelectorAll('.track').forEach(track => {
+      track.classList.remove('drag-over');
+    });
+    
+    // ドラッグプレビューを削除
+    const dragPreview = document.querySelector('.mobile-drag-preview');
+    if (dragPreview) {
+      dragPreview.remove();
+    }
+    
+    // グローバル変数をクリア
+    window.currentDraggedSoundBlob = null;
+    window.currentDraggedSound = null;
+  };
+
   const playSound = () => {
-    if (sound.audioBlob && !isPlaying) {
+    if (sound.audioBlob && !isPlaying && !isDragging) {
       const audio = new Audio();
       audio.src = URL.createObjectURL(sound.audioBlob);
       audio.play()
@@ -1113,11 +1243,46 @@ const SoundItem = ({ sound, onDragStart }) => {
     }
   };
 
+  // ドラッグプレビューを作成
+  const createDragPreview = () => {
+    if (isDragging && touchMove) {
+      let dragPreview = document.querySelector('.mobile-drag-preview');
+      if (!dragPreview) {
+        dragPreview = document.createElement('div');
+        dragPreview.className = 'mobile-drag-preview';
+        dragPreview.textContent = sound.name;
+        dragPreview.style.cssText = `
+          position: fixed;
+          background: rgba(0, 123, 255, 0.8);
+          color: white;
+          padding: 5px 10px;
+          border-radius: 4px;
+          font-size: 12px;
+          pointer-events: none;
+          z-index: 1000;
+          left: ${touchMove.x - 50}px;
+          top: ${touchMove.y - 20}px;
+        `;
+        document.body.appendChild(dragPreview);
+      }
+    }
+  };
+
+  // ドラッグプレビューの更新
+  React.useEffect(() => {
+    if (isDragging) {
+      createDragPreview();
+    }
+  }, [isDragging, touchMove]);
+
   return (
     <div
-      className="sound-item"
+      className={`sound-item ${isDragging ? 'dragging' : ''}`}
       draggable="true"
       onDragStart={handleDragStart}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       <div className="sound-info">
         <h4>{sound.name}</h4>
@@ -1197,6 +1362,58 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
     onDrop(e, track.id, timePosition);
   };
 
+  // モバイルドロップイベントの処理
+  const handleMobileDrop = (e) => {
+    const { trackId, timePosition, sound } = e.detail;
+    
+    // 模擬的なドロップイベントを作成
+    const mockDropEvent = {
+      preventDefault: () => {},
+      dataTransfer: {
+        getData: (type) => {
+          if (type === 'application/json') {
+            return JSON.stringify(sound);
+          }
+          return '';
+        }
+      }
+    };
+    
+    onDrop(mockDropEvent, trackId, timePosition);
+  };
+
+  // モバイルクリップ移動イベントの処理
+  const handleMobileClipMove = (e) => {
+    const { clip, originalTrackId, newTrackId, timePosition } = e.detail;
+    
+    // 模擬的なドロップイベントを作成
+    const mockDropEvent = {
+      preventDefault: () => {},
+      dataTransfer: {
+        getData: (type) => {
+          if (type === 'text/plain') {
+            return `existing-clip-${clip.id}`;
+          }
+          return '';
+        }
+      }
+    };
+    
+    onDrop(mockDropEvent, newTrackId, timePosition);
+  };
+
+  React.useEffect(() => {
+    const trackElement = document.querySelector(`[data-track-id="${track.id}"]`);
+    if (trackElement) {
+      trackElement.addEventListener('mobileDrop', handleMobileDrop);
+      trackElement.addEventListener('mobileClipMove', handleMobileClipMove);
+      return () => {
+        trackElement.removeEventListener('mobileDrop', handleMobileDrop);
+        trackElement.removeEventListener('mobileClipMove', handleMobileClipMove);
+      };
+    }
+  }, [track.id]);
+
   return (
     <div 
       className="track"
@@ -1237,6 +1454,9 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
 
 const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
   const [waveformData, setWaveformData] = React.useState([]);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [touchStart, setTouchStart] = React.useState(null);
+  const [touchMove, setTouchMove] = React.useState(null);
 
   React.useEffect(() => {
     // 簡単な波形データ生成（実際の実装では音声解析が必要）
@@ -1263,12 +1483,101 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     onDragStart(clip, trackId);
   };
 
+  // タッチイベント対応（クリップの移動）
+  const handleTouchStart = (e) => {
+    e.stopPropagation();
+    const touch = e.touches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
+    setIsDragging(false);
+    
+    // スクロールを一時的に無効化
+    document.body.style.overflow = 'hidden';
+  };
+
+  const handleTouchMove = (e) => {
+    if (!touchStart) return;
+    
+    const touch = e.touches[0];
+    const currentPos = { x: touch.clientX, y: touch.clientY };
+    setTouchMove(currentPos);
+    
+    // ドラッグ開始の判定（5px以上移動）
+    const deltaX = Math.abs(currentPos.x - touchStart.x);
+    const deltaY = Math.abs(currentPos.y - touchStart.y);
+    
+    if (!isDragging && (deltaX > 5 || deltaY > 5)) {
+      setIsDragging(true);
+      onDragStart(clip, trackId);
+    }
+    
+    if (isDragging) {
+      e.preventDefault(); // スクロールを防止
+      
+      // ドロップターゲットのハイライト
+      const elementBelow = document.elementFromPoint(currentPos.x, currentPos.y);
+      const trackElement = elementBelow?.closest('.track');
+      
+      // 既存のハイライトを削除
+      document.querySelectorAll('.track').forEach(track => {
+        track.classList.remove('drag-over');
+      });
+      
+      // 新しいハイライトを追加（自分のトラック以外も含む）
+      if (trackElement) {
+        trackElement.classList.add('drag-over');
+      }
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (isDragging && touchMove) {
+      // ドロップ処理
+      const elementBelow = document.elementFromPoint(touchMove.x, touchMove.y);
+      const trackElement = elementBelow?.closest('.track');
+      
+      if (trackElement) {
+        const newTrackId = parseInt(trackElement.dataset.trackId);
+        const rect = trackElement.getBoundingClientRect();
+        const timePosition = touchMove.x - rect.left;
+        
+        // 既存クリップの移動イベントを発火
+        const moveEvent = new CustomEvent('mobileClipMove', {
+          detail: {
+            clip,
+            originalTrackId: trackId,
+            newTrackId,
+            timePosition
+          }
+        });
+        trackElement.dispatchEvent(moveEvent);
+      }
+    }
+    
+    // クリーンアップ
+    setTouchStart(null);
+    setTouchMove(null);
+    setIsDragging(false);
+    document.body.style.overflow = '';
+    
+    // ハイライトを削除
+    document.querySelectorAll('.track').forEach(track => {
+      track.classList.remove('drag-over');
+    });
+    
+    if (onDragEnd) {
+      onDragEnd();
+    }
+  };
+
   return (
     <div 
-      className="audio-clip"
+      className={`audio-clip ${isDragging ? 'dragging' : ''}`}
       draggable="true"
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{
         left: clip.startTime,
         width: isFinite(clip.duration) && clip.duration > 0 ? clip.duration : 400 // デフォルト1小節

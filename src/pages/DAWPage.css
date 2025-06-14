@@ -521,95 +521,89 @@
   gap: 12px;
 }
 
-.sound-item {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  border-radius: 12px;
-  padding: 15px;
-  cursor: grab;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.sound-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-}
-
-.sound-item:active {
+/* ドラッグ中の見た目 */
+.sound-item.dragging {
+  opacity: 0.7;
+  transform: scale(0.95);
   cursor: grabbing;
-  transform: scale(0.98);
 }
 
-.sound-info h4 {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: bold;
+/* ドラッグ中の見た目 */
+.sound-item.dragging {
+  opacity: 0.7;
+  transform: scale(0.95);
+  cursor: grabbing;
 }
 
-.sound-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 10px;
-}
-
-.sound-tag {
-  background: rgba(255, 255, 255, 0.3);
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.sound-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.play-sound-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
+/* モバイルドラッグプレビュー */
+.mobile-drag-preview {
+  position: fixed;
+  background: rgba(0, 123, 255, 0.9);
   color: white;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
-.play-sound-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.1);
-}
-
-.play-sound-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.no-sounds {
-  text-align: center;
-  color: #666;
-  padding: 40px 20px;
-}
-
-.no-sounds p {
-  margin: 10px 0;
-}
-
-/* ドラッグ&ドロップのフィードバック */
+/* トラックのドラッグオーバー状態 */
 .track.drag-over {
-  background: rgba(33, 150, 243, 0.1);
-  border: 2px dashed var(--accent-color);
+  background-color: rgba(0, 123, 255, 0.1);
+  border: 2px dashed #007bff;
+  box-shadow: inset 0 0 10px rgba(0, 123, 255, 0.2);
 }
 
-/* iPad向けのレスポンシブデザイン */
+/* オーディオクリップのドラッグ状態 */
+.audio-clip.dragging {
+  opacity: 0.7;
+  transform: scale(0.95);
+  z-index: 100;
+}
+
+/* タッチデバイス用の調整 */
+@media (hover: none) and (pointer: coarse) {
+  .sound-item {
+    padding: 20px; /* タッチしやすくするため大きくする */
+    margin-bottom: 15px;
+  }
+  
+  .play-sound-btn {
+    width: 44px; /* タッチターゲットを大きく */
+    height: 44px;
+    font-size: 18px;
+  }
+  
+  .audio-clip {
+    min-height: 50px; /* タッチしやすくする */
+  }
+  
+  .remove-clip-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+  
+  /* 長押しによる選択を無効化 */
+  * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* スクロール時の bounce 効果を無効化 */
+  body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none;
+  }
+}
+
 @media (max-width: 1024px) {
   .daw-controls {
     flex-direction: column;
@@ -692,6 +686,55 @@
   }
 }
 
+/* モバイル利用のコツセクション */
+.mobile-tips {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(0, 123, 255, 0.1);
+  border-radius: 8px;
+  border-left: 4px solid #007bff;
+}
+
+.mobile-tips h4 {
+  margin: 0 0 10px 0;
+  color: #007bff;
+  font-size: 16px;
+}
+
+.mobile-tips ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.mobile-tips li {
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #666;
+}
+
+/* スマートフォン表示での調整 */
+@media (max-width: 768px) {
+  .mobile-tips {
+    display: block;
+  }
+  
+  .instructions {
+    font-size: 14px;
+  }
+  
+  .instructions li {
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+}
+
+/* デスクトップではモバイルTipsを少し控えめに */
+@media (min-width: 769px) {
+  .mobile-tips {
+    opacity: 0.8;
+  }
+}
+
 /* プロジェクト制御 */
 .project-controls {
   display: flex;
@@ -717,9 +760,4 @@
   background: linear-gradient(135deg, #9e9e9e, #757575);
   cursor: not-allowed;
   transform: none;
-}
-
-.button-primary:disabled:hover {
-  transform: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
