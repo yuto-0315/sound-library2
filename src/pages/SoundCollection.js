@@ -10,7 +10,24 @@ const SoundCollection = () => {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // iOSでのマイクアクセス改善 - まずテストを実行
+      const hasAccess = await testMicrophoneAccess();
+      if (!hasAccess) {
+        return;
+      }
+
+      console.log('録音開始処理中...');
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      console.log('録音ストリーム取得成功');
+      
       const recorder = new MediaRecorder(stream);
       const chunks = [];
 
@@ -34,9 +51,26 @@ const SoundCollection = () => {
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
+      console.log('録音開始完了');
+      
     } catch (error) {
       console.error('録音の開始に失敗しました:', error);
-      alert('マイクへのアクセスが許可されていません。');
+      
+      let errorMessage = '録音を開始できませんでした。';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'マイクの使用が拒否されました。ブラウザの設定でマイクアクセスを許可してください。';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'マイクが見つかりません。デバイスにマイクが接続されているか確認してください。';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'お使いのブラウザは録音機能をサポートしていません。';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = 'マイクが他のアプリケーションで使用中の可能性があります。';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
     }
   };
 
@@ -104,6 +138,78 @@ const SoundCollection = () => {
     }
   };
 
+  // マイクアクセステスト機能（iOSでの問題対策）
+  const testMicrophoneAccess = async () => {
+    try {
+      console.log('マイクアクセステスト開始');
+      
+      // HTTPS接続チェック
+      if (!checkHTTPS()) {
+        alert('🔒 録音機能を使用するにはHTTPS接続が必要です。\n\niPhoneでは特に、セキュアな接続が必要となります。');
+        return false;
+      }
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('お使いのブラウザは録音機能をサポートしていません。');
+      }
+
+      // まずマイクの権限状態を確認
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'microphone' });
+          console.log('マイク権限状態:', permission.state);
+          
+          if (permission.state === 'denied') {
+            alert('マイクアクセスが拒否されています。ブラウザの設定からマイクの使用を許可してください。');
+            return false;
+          }
+        } catch (permError) {
+          console.log('権限確認はサポートされていません:', permError);
+        }
+      }
+
+      // 実際にマイクアクセスをテスト
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      // すぐにストリームを停止
+      stream.getTracks().forEach(track => track.stop());
+      console.log('マイクアクセステスト成功');
+      return true;
+      
+    } catch (error) {
+      console.error('マイクアクセステスト失敗:', error);
+      
+      let errorMessage = 'マイクにアクセスできません。';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'マイクの使用が拒否されました。ブラウザの設定でマイクアクセスを許可してください。\n\niPhoneの場合：\n1. Safari設定 > プライバシーとセキュリティ > マイク\n2. このサイトを許可に設定';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'マイクが見つかりません。';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'お使いのブラウザは録音機能をサポートしていません。';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
+      return false;
+    }
+  };
+
+  // HTTPS接続チェック（iOSでの録音に必要）
+  const checkHTTPS = () => {
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return false;
+    }
+    return true;
+  };
+
   return (
     <div className="sound-collection">
       <h2>🎤 音あつめページ</h2>
@@ -112,6 +218,14 @@ const SoundCollection = () => {
       <div className="collection-actions">
         <div className="recording-section card">
           <h3>🎙️ 音を録音する</h3>
+          
+          {/* iOS用の説明 */}
+          <div className="ios-notice">
+            <p>📱 <strong>iPhone/iPadをお使いの方へ：</strong></p>
+            <p>録音ボタンを押すとマイクの使用許可を求めるダイアログが表示されます。「許可」を選択してください。</p>
+            <p>ダイアログが表示されない場合は、Safari設定 → プライバシーとセキュリティ → マイク でこのサイトを許可してください。</p>
+          </div>
+          
           <div className="recording-controls">
             {!isRecording ? (
               <button 

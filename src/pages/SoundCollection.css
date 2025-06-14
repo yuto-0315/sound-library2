@@ -227,6 +227,30 @@
   width: 100%;
 }
 
+.ios-notice {
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  border: 1px solid #2196f3;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 15px 0;
+  text-align: left;
+}
+
+.ios-notice p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #1565c0;
+}
+
+.ios-notice p:first-child {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.ios-notice strong {
+  color: #0d47a1;
+}
+
 /* iPad向けのレスポンシブデザイン */
 @media (max-width: 768px) {
   .collection-actions {
