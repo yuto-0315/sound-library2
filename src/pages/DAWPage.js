@@ -309,11 +309,36 @@ const DAWPage = () => {
           trackIdCounterRef.current = projectData.trackIdCounter;
         }
         
-        // 音素材を復元
+        // 音素材を復元（既存の音素材に追加）
         if (projectData.sounds) {
           const restoredSounds = projectData.sounds.map(sound => restoreAudioBlob(sound));
-          setSounds(restoredSounds);
-          console.log('音素材を復元しました:', restoredSounds.length, '個');
+          
+          // 既存の音素材と読み込んだ音素材を結合
+          setSounds(prevSounds => {
+            const maxId = prevSounds.length > 0 ? Math.max(...prevSounds.map(s => s.id)) : 0;
+            const existingNames = new Set(prevSounds.map(s => s.name));
+            
+            const newSounds = restoredSounds.map((sound, index) => {
+              let newName = sound.name;
+              let counter = 1;
+              
+              // 名前の重複をチェックして、重複する場合は番号を付ける
+              while (existingNames.has(newName)) {
+                newName = `${sound.name} (${counter})`;
+                counter++;
+              }
+              existingNames.add(newName);
+              
+              return {
+                ...sound,
+                id: maxId + index + 1, // 新しいIDを割り当て
+                name: newName // 重複しない名前を設定
+              };
+            });
+            
+            console.log('音素材を追加しました:', newSounds.length, '個（既存:', prevSounds.length, '個）');
+            return [...prevSounds, ...newSounds];
+          });
         }
         
         console.log('プロジェクトを読み込みました');
@@ -692,7 +717,7 @@ const DAWPage = () => {
   // ドラッグ終了時のクリーンアップ
   const handleDragEnd = (e) => {
     // ドロップが正常に処理されなかった場合、元の状態を保持
-    if (draggedClip && e.dataTransfer.dropEffect === 'none') {
+    if (draggedClip && e && e.dataTransfer && e.dataTransfer.dropEffect === 'none') {
       console.log('ドラッグがキャンセルされました。元の位置を保持します。');
     }
     setDraggedClip(null);
@@ -922,54 +947,52 @@ const DAWPage = () => {
       </div>
 
       <div className="daw-main-area">
-        {showSoundPanel && (
-          <div className="sound-panel">
-            <div className="sound-panel-header">
-              <h3>🎵 音素材</h3>
-              <button 
-                className="sound-panel-close"
-                onClick={() => setShowSoundPanel(false)}
-                title="音素材パネルを閉じる"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="sound-list">
-              {sounds.length > 0 ? (
-                sounds.map(sound => (
-                  <SoundItem 
-                    key={sound.id} 
-                    sound={sound} 
-                    onDragStart={async (sound) => {
-                      // ドラッグ開始時に音声の長さを計算
-                      console.log('ドラッグ開始 - 音声長さ計算中:', sound.name);
-                      if (sound.audioBlob) {
-                        try {
-                          const duration = await getAudioDuration(sound.audioBlob, bpm);
-                          console.log('計算された音声長さ:', duration, 'px');
-                          setDraggedSoundDuration(duration);
-                        } catch (error) {
-                          console.warn('ドラッグ時の音声長さ計算に失敗:', error);
-                          setDraggedSoundDuration(400);
-                        }
-                      } else {
-                        console.log('audioBlob が存在しません - デフォルト値使用');
+        <div className={`sound-panel ${!showSoundPanel ? 'panel-hidden' : ''}`}>
+          <div className="sound-panel-header">
+            <h3>🎵 音素材</h3>
+            <button 
+              className="sound-panel-close"
+              onClick={() => setShowSoundPanel(false)}
+              title="音素材パネルを閉じる"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="sound-list">
+            {sounds.length > 0 ? (
+              sounds.map(sound => (
+                <SoundItem 
+                  key={sound.id} 
+                  sound={sound} 
+                  onDragStart={async (sound) => {
+                    // ドラッグ開始時に音声の長さを計算
+                    console.log('ドラッグ開始 - 音声長さ計算中:', sound.name);
+                    if (sound.audioBlob) {
+                      try {
+                        const duration = await getAudioDuration(sound.audioBlob, bpm);
+                        console.log('計算された音声長さ:', duration, 'px');
+                        setDraggedSoundDuration(duration);
+                      } catch (error) {
+                        console.warn('ドラッグ時の音声長さ計算に失敗:', error);
                         setDraggedSoundDuration(400);
                       }
-                    }}
-                  />
-                ))
-              ) : (
-                <div className="no-sounds">
-                  <p>音素材がありません</p>
-                  <p>「音あつめ」ページで音を録音してください</p>
-                </div>
-              )}
-            </div>
+                    } else {
+                      console.log('audioBlob が存在しません - デフォルト値使用');
+                      setDraggedSoundDuration(400);
+                    }
+                  }}
+                />
+              ))
+            ) : (
+              <div className="no-sounds">
+                <p>音素材がありません</p>
+                <p>「音あつめ」ページで音を録音してください</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        <div className="daw-workspace">
+        <div className={`daw-workspace ${!showSoundPanel ? 'panel-hidden' : ''}`}>
           <div className="track-headers">
             <div className="timeline-header-spacer">
               タイムライン
@@ -1527,7 +1550,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     });
     
     if (onDragEnd) {
-      onDragEnd();
+      onDragEnd(null); // nullを渡してガード条件を満たす
     }
   };
 

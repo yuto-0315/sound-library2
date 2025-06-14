@@ -148,6 +148,12 @@
   min-height: 600px;
   height: 70vh;
   position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* パネルが隠れているときのワークスペース調整 */
+.daw-workspace.panel-hidden {
+  margin-left: -20px; /* gap分を相殺 */
 }
 
 .track-headers {
@@ -206,6 +212,7 @@
   min-height: 500px;
   display: flex;
   flex-direction: column;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .timeline-header-spacer {
@@ -229,6 +236,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .measure {
@@ -297,6 +305,7 @@
   min-height: 500px;
   background: #fafafa;
   flex: 1;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .track {
@@ -497,26 +506,46 @@
   display: flex;
   gap: 20px;
   flex: 1;
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sound-panel {
-  position: absolute;
-  right: 20px;
-  top: 20px;
   width: 280px;
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.15);
   border: 2px solid #e0e0e0;
   padding: 20px;
-  max-height: calc(70vh - 80px);
+  max-height: 600px;
   overflow-y: auto;
-  z-index: 10;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* 音素材パネルが隠れている状態 */
+.sound-panel.panel-hidden {
+  width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  opacity: 0;
+  transform: translateX(-100%);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.sound-panel.panel-hidden * {
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
 .sound-panel:hover {
   box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+  transform: translateY(-2px);
 }
 
 .sound-panel h3 {
@@ -751,6 +780,10 @@
   .daw-controls {
     flex-direction: column;
     gap: 15px;
+  }
+  
+  .sound-panel {
+    width: 250px; /* 少し狭くする */
   }
   
   .track-headers {
