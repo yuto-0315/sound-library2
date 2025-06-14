@@ -85,7 +85,7 @@ const DAWPage = () => {
   }, []);
 
   // 音声ファイルの継続時間を取得してピクセル幅に変換
-  const getAudioDuration = (audioBlob, currentBpm = bpm) => {
+  const getAudioDuration = useCallback((audioBlob, currentBpm = bpm) => {
     return new Promise(async (resolve) => {
       if (!audioBlob || !(audioBlob instanceof Blob)) {
         console.log('無効なaudioBlob - デフォルト値を使用');
@@ -99,7 +99,7 @@ const DAWPage = () => {
         bpm: currentBpm
       });
 
-      // AudioContextを使用した方法を試す
+      // AudioContextを使用した方法を優先
       if (audioContext) {
         try {
           console.log('AudioContext方式で音声長さを取得中...');
@@ -117,101 +117,15 @@ const DAWPage = () => {
             return;
           }
         } catch (error) {
-          console.log('AudioContext方式でエラー、HTML Audio方式にフォールバック:', error);
+          console.log('AudioContext方式でエラー:', error);
         }
       }
 
-      // HTML Audio方式（フォールバック）
-      const audio = new Audio();
-      
-      const handleLoadedMetadata = () => {
-        const durationInSeconds = audio.duration;
-        console.log('HTML Audio方式で取得した長さ:', durationInSeconds, '秒');
-        console.log('音声ファイルの詳細情報:', {
-          duration: durationInSeconds,
-          readyState: audio.readyState,
-          networkState: audio.networkState,
-          currentTime: audio.currentTime,
-          paused: audio.paused,
-          ended: audio.ended
-        });
-        
-        // URLをクリーンアップ
-        URL.revokeObjectURL(audio.src);
-        
-        // 有効な数値かチェック（NaN、Infinity、負の値を除外）
-        if (isFinite(durationInSeconds) && durationInSeconds > 0 && durationInSeconds !== Infinity) {
-          // BPMに基づいてピクセル幅を計算
-          // 1拍 = 100px, 1小節 = 4拍 = 400px
-          // 1秒あたりの拍数 = BPM / 60
-          // 1秒あたりのピクセル数 = (BPM / 60) * 100
-          const pixelsPerSecond = (currentBpm / 60) * 100;
-          const widthInPixels = durationInSeconds * pixelsPerSecond;
-          console.log('HTML Audio計算結果 - BPM:', currentBpm, '拍/秒:', currentBpm/60, 'ピクセル/秒:', pixelsPerSecond, '最終幅:', widthInPixels, 'px');
-          resolve(widthInPixels);
-        } else {
-          // デフォルト値（1小節 = 400px）
-          console.log('無効な音声長さのためデフォルト値を使用:', durationInSeconds);
-          resolve(400);
-        }
-      };
-      
-      const handleError = (event) => {
-        console.log('音声ファイルの読み込みエラー - デフォルト値を使用', event);
-        console.log('エラー詳細:', {
-          error: audio.error,
-          networkState: audio.networkState,
-          readyState: audio.readyState
-        });
-        URL.revokeObjectURL(audio.src);
-        resolve(400);
-      };
-      
-      const handleCanPlayThrough = () => {
-        console.log('canplaythrough イベント発生 - duration:', audio.duration);
-      };
-      
-      // タイムアウト処理を追加（10秒でタイムアウト）
-      const timeoutId = setTimeout(() => {
-        console.log('音声ファイルの読み込みタイムアウト - デフォルト値を使用');
-        console.log('タイムアウト時の状態:', {
-          duration: audio.duration,
-          readyState: audio.readyState,
-          networkState: audio.networkState
-        });
-        audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        audio.removeEventListener('error', handleError);
-        audio.removeEventListener('canplaythrough', handleCanPlayThrough);
-        URL.revokeObjectURL(audio.src);
-        resolve(400);
-      }, 10000);
-      
-      audio.addEventListener('loadedmetadata', () => {
-        console.log('loadedmetadata イベント発生');
-        clearTimeout(timeoutId);
-        handleLoadedMetadata();
-      });
-      audio.addEventListener('error', (event) => {
-        console.log('error イベント発生');
-        clearTimeout(timeoutId);
-        handleError(event);
-      });
-      audio.addEventListener('canplaythrough', handleCanPlayThrough);
-      
-      try {
-        const objectUrl = URL.createObjectURL(audioBlob);
-        console.log('ObjectURL作成成功:', objectUrl);
-        audio.src = objectUrl;
-        
-        // 手動でloadを呼び出し
-        audio.load();
-      } catch (error) {
-        console.error('createObjectURL エラー:', error);
-        clearTimeout(timeoutId);
-        resolve(400);
-      }
+      // AudioContextが失敗した場合はデフォルト値を使用
+      console.log('AudioContextが利用できないため、デフォルト値を使用');
+      resolve(400);
     });
-  };
+  }, [audioContext, bpm]);
 
   // プレイヘッドのアニメーション更新
   const updatePlayhead = useCallback(() => {
@@ -273,7 +187,7 @@ const DAWPage = () => {
   }, [isPlaying, startPlayTime, updatePlayhead]);
 
   // BPM変更時のハンドラー
-  const handleBpmChange = async (newBpm) => {
+  const handleBpmChange = useCallback(async (newBpm) => {
     setBpm(newBpm);
     
     // 既存のクリップのdurationを新しいBPMで再計算
@@ -298,7 +212,7 @@ const DAWPage = () => {
     );
     
     setTracks(updatedTracks);
-  };
+  }, [tracks, getAudioDuration]);
 
   // プロジェクト保存機能
   const saveProject = () => {
@@ -570,13 +484,16 @@ const DAWPage = () => {
       name: trackName,
       clips: []
     };
-    setTracks([...tracks, newTrack]);
+    setTracks(prevTracks => [...prevTracks, newTrack]);
   };
 
   const removeTrack = (trackId) => {
-    if (tracks.length > 1) {
-      setTracks(tracks.filter(track => track.id !== trackId));
-    }
+    setTracks(prevTracks => {
+      if (prevTracks.length > 1) {
+        return prevTracks.filter(track => track.id !== trackId);
+      }
+      return prevTracks;
+    });
   };
 
   const handleDrop = async (e, trackId, timePosition) => {
@@ -600,7 +517,7 @@ const DAWPage = () => {
           trackId: trackId
         };
 
-        setTracks(tracks.map(track => {
+        setTracks(prevTracks => prevTracks.map(track => {
           if (track.id === draggedClip.originalTrackId && track.id === trackId) {
             // 同じトラック内での移動
             console.log('同じトラック内での移動');
@@ -682,7 +599,7 @@ const DAWPage = () => {
       }
 
       const newClip = {
-        id: Date.now(),
+        id: Date.now() + Math.random(), // より確実にユニークなIDを生成
         soundData: soundData,
         startTime: snappedPosition,
         duration: duration,
@@ -690,12 +607,21 @@ const DAWPage = () => {
       };
 
       console.log('作成されたクリップ:', newClip);
+      console.log('現在のトラック数:', tracks.length);
+      console.log('対象トラックID:', trackId);
+      console.log('対象トラック:', tracks.find(t => t.id === trackId));
 
-      setTracks(tracks.map(track => 
-        track.id === trackId 
-          ? { ...track, clips: [...track.clips, newClip] }
-          : track
-      ));
+      // 関数型更新を使用して最新の状態を確実に取得
+      setTracks(prevTracks => {
+        console.log('更新前のトラック:', prevTracks.find(t => t.id === trackId));
+        const updatedTracks = prevTracks.map(track => 
+          track.id === trackId 
+            ? { ...track, clips: [...track.clips, newClip] }
+            : track
+        );
+        console.log('更新後のトラック:', updatedTracks.find(t => t.id === trackId));
+        return updatedTracks;
+      });
     } catch (error) {
       console.error('ドロップエラー:', error);
       setError('音素材の配置に失敗しました。再度お試しください。');
@@ -748,7 +674,7 @@ const DAWPage = () => {
   };
 
   const removeClip = (trackId, clipId) => {
-    setTracks(tracks.map(track => 
+    setTracks(prevTracks => prevTracks.map(track => 
       track.id === trackId 
         ? { ...track, clips: track.clips.filter(clip => clip.id !== clipId) }
         : track
