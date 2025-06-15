@@ -52,14 +52,41 @@ const DAWPage = () => {
       if (sound.audioData) {
         try {
           console.log('音声データ復元中:', sound.name, 'データサイズ:', sound.audioData.length);
-          const byteCharacters = atob(sound.audioData.split(',')[1]);
+          
+          // Base64データの検証
+          if (!sound.audioData.includes(',')) {
+            console.error('無効なBase64フォーマット:', sound.name);
+            return sound;
+          }
+          
+          const base64Data = sound.audioData.split(',')[1];
+          if (!base64Data || base64Data.length === 0) {
+            console.error('Base64データが空です:', sound.name);
+            return sound;
+          }
+          
+          const byteCharacters = atob(base64Data);
           const byteNumbers = new Array(byteCharacters.length);
           for (let i = 0; i < byteCharacters.length; i++) {
             byteNumbers[i] = byteCharacters.charCodeAt(i);
           }
           const byteArray = new Uint8Array(byteNumbers);
+          
+          // Blobサイズの検証
+          if (byteArray.length === 0) {
+            console.error('Blobデータが空です:', sound.name);
+            return sound;
+          }
+          
           const blob = new Blob([byteArray], { type: 'audio/wav' });
           console.log('Blob復元成功:', sound.name, 'サイズ:', blob.size, 'タイプ:', blob.type);
+          
+          // Blobの有効性を確認
+          if (blob.size === 0) {
+            console.error('作成されたBlobのサイズが0です:', sound.name);
+            return sound;
+          }
+          
           return { ...sound, audioBlob: blob };
         } catch (error) {
           console.error('音声データの復元に失敗:', sound.name, error);
@@ -69,7 +96,35 @@ const DAWPage = () => {
       return sound;
     });
     
-    setSounds(soundsWithBlob);
+    // 有効な音素材のみをフィルタリング
+    const validSounds = soundsWithBlob.filter(sound => {
+      if (!sound.audioBlob) {
+        console.warn('audioBlobが存在しない音素材をスキップ:', sound.name);
+        return false;
+      }
+      if (!(sound.audioBlob instanceof Blob)) {
+        console.warn('無効なBlob形式の音素材をスキップ:', sound.name);
+        return false;
+      }
+      if (sound.audioBlob.size === 0) {
+        console.warn('サイズが0のBlob音素材をスキップ:', sound.name);
+        return false;
+      }
+      return true;
+    });
+    
+    console.log('有効な音素材数:', validSounds.length, '/ 総数:', soundsWithBlob.length);
+    setSounds(validSounds);
+    
+    // 無効な音素材があった場合はLocalStorageを更新
+    if (validSounds.length !== soundsWithBlob.length) {
+      console.log('無効な音素材を除去してLocalStorageを更新');
+      const validSoundsForStorage = validSounds.map(sound => ({
+        ...sound,
+        audioBlob: undefined // Blobは保存しない
+      }));
+      localStorage.setItem('soundRecordings', JSON.stringify(validSoundsForStorage));
+    }
     
     return () => {
       if (ctx) {
@@ -1273,27 +1328,63 @@ const SoundItem = ({ sound, onDragStart }) => {
 
   const playSound = () => {
     if (sound.audioBlob && !isPlaying && !isDragging) {
-      const audio = new Audio();
-      const audioUrl = URL.createObjectURL(sound.audioBlob);
-      audio.src = audioUrl;
-      
-      audio.play()
-        .then(() => {
-          setIsPlaying(true);
-          
-          const handleEnded = () => {
-            setIsPlaying(false);
-            URL.revokeObjectURL(audioUrl); // URLをクリーンアップ
-            audio.removeEventListener('ended', handleEnded);
-          };
-          
-          audio.addEventListener('ended', handleEnded);
-        })
-        .catch(error => {
-          console.error('音声再生エラー:', error);
-          URL.revokeObjectURL(audioUrl); // エラー時もクリーンアップ
-          setIsPlaying(false);
+      // Blobの有効性をチェック
+      if (!(sound.audioBlob instanceof Blob) || sound.audioBlob.size === 0) {
+        console.error('無効なaudioBlob:', {
+          name: sound.name,
+          isBlob: sound.audioBlob instanceof Blob,
+          size: sound.audioBlob?.size
         });
+        return;
+      }
+      
+      const audio = new Audio();
+      let audioUrl;
+      
+      try {
+        audioUrl = URL.createObjectURL(sound.audioBlob);
+        audio.src = audioUrl;
+        
+        audio.play()
+          .then(() => {
+            setIsPlaying(true);
+            
+            const handleEnded = () => {
+              setIsPlaying(false);
+              if (audioUrl) {
+                URL.revokeObjectURL(audioUrl); // URLをクリーンアップ
+              }
+              audio.removeEventListener('ended', handleEnded);
+            };
+            
+            audio.addEventListener('ended', handleEnded);
+            
+            // 音声の読み込みエラーもハンドリング
+            audio.addEventListener('error', (error) => {
+              console.error('音声読み込みエラー:', error);
+              setIsPlaying(false);
+              if (audioUrl) {
+                URL.revokeObjectURL(audioUrl);
+              }
+            });
+          })
+          .catch(error => {
+            console.error('音声再生エラー:', error);
+            if (audioUrl) {
+              URL.revokeObjectURL(audioUrl); // エラー時もクリーンアップ
+            }
+            setIsPlaying(false);
+          });
+      } catch (error) {
+        console.error('createObjectURLエラー:', error);
+        setIsPlaying(false);
+      }
+    } else {
+      console.log('再生条件不満足:', {
+        hasAudioBlob: !!sound.audioBlob,
+        isPlaying,
+        isDragging
+      });
     }
   };
 
