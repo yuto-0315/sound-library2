@@ -8,7 +8,6 @@ const SoundCollection = () => {
   const [currentRecording, setCurrentRecording] = useState(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioContext, setAudioContext] = useState(null);
-  const [analyser, setAnalyser] = useState(null);
   const fileInputRef = useRef(null);
   const animationFrameRef = useRef(null);
 
@@ -60,7 +59,6 @@ const SoundCollection = () => {
       source.connect(analyserNode);
       
       setAudioContext(audioCtx);
-      setAnalyser(analyserNode);
       
       // 音声レベル監視開始
       monitorAudioLevel(analyserNode);
@@ -138,7 +136,6 @@ const SoundCollection = () => {
       audioContext.close();
       setAudioContext(null);
     }
-    setAnalyser(null);
   };
 
   // Blobを Base64 に変換する関数
@@ -270,14 +267,26 @@ const SoundCollection = () => {
 
   // 音声レベル監視関数
   const monitorAudioLevel = (analyserNode) => {
-    const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+    const bufferLength = analyserNode.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
     
     const updateLevel = () => {
-      analyserNode.getByteFrequencyData(dataArray);
+      if (!isRecording) return;
       
-      // 音声レベルを計算（0-100の範囲）
-      const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-      const level = Math.min(100, (average / 255) * 100);
+      // 時間領域データを取得（周波数領域ではなく）
+      analyserNode.getByteTimeDomainData(dataArray);
+      
+      // RMS（二乗平均平方根）を計算
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const sample = (dataArray[i] - 128) / 128; // -1 to 1の範囲に正規化
+        sum += sample * sample;
+      }
+      const rms = Math.sqrt(sum / bufferLength);
+      
+      // デシベルに変換して0-100の範囲にマッピング
+      const db = 20 * Math.log10(rms + 0.0001); // 0.0001は-∞を防ぐため
+      const level = Math.max(0, Math.min(100, ((db + 60) / 60) * 100)); // -60dBを0%、0dBを100%に
       
       setAudioLevel(level);
       

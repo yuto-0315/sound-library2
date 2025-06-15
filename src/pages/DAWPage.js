@@ -36,6 +36,7 @@ const DAWPage = () => {
   const [isExporting, setIsExporting] = useState(false); // 音源出力中フラグ
   const timelineRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const dragOverTimeoutRef = useRef(null);
 
   useEffect(() => {
     // Web Audio API の初期化
@@ -77,18 +78,25 @@ const DAWPage = () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      if (dragOverTimeoutRef.current) {
+        clearTimeout(dragOverTimeoutRef.current);
+      }
       // 再生中の音声をすべて停止・クリーンアップ
-      playingAudios.forEach(({ audio, timeoutId, audioUrl }) => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        if (audio) {
-          audio.pause();
-          audio.src = '';
-        }
-        if (audioUrl) {
-          URL.revokeObjectURL(audioUrl);
-        }
+      // useEffect内でplayingAudiosの最新値を取得
+      setPlayingAudios(currentPlayingAudios => {
+        currentPlayingAudios.forEach(({ audio, timeoutId, audioUrl }) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          if (audio) {
+            audio.pause();
+            audio.src = '';
+          }
+          if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+          }
+        });
+        return new Map(); // 空のMapを返す
       });
       // グローバル変数をクリーンアップ
       if (window.currentDraggedSoundBlob) {
@@ -679,40 +687,69 @@ const DAWPage = () => {
       e.dataTransfer.dropEffect = 'copy';
     }
     
-    // ドラッグプレビューの更新
-    const rect = e.currentTarget.getBoundingClientRect();
-    const timePosition = e.clientX - rect.left;
-    const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
+    // スロットリング - 16ms（60FPS）間隔で実行を制限
+    if (dragOverTimeoutRef.current) {
+      return;
+    }
     
-    const trackElement = e.currentTarget;
-    const trackRect = trackElement.getBoundingClientRect();
-    const tracksAreaRect = timelineRef.current?.getBoundingClientRect();
+    // 必要な情報を事前に抽出
+    const clientX = e.clientX;
+    const currentTarget = e.currentTarget;
     
-    if (tracksAreaRect) {
-      const relativeTop = trackRect.top - tracksAreaRect.top;
-      const trackId = parseInt(trackElement.dataset.trackId);
+    dragOverTimeoutRef.current = setTimeout(() => {
+      dragOverTimeoutRef.current = null;
+      updateDragPreview(clientX, currentTarget);
+    }, 16);
+  };
+  
+  const updateDragPreview = (clientX, trackElement) => {
+    // null チェックを追加
+    if (!trackElement || !timelineRef.current) {
+      return;
+    }
+    
+    try {
+      // ドラッグプレビューの更新
+      const rect = trackElement.getBoundingClientRect();
+      const timePosition = clientX - rect.left;
+      const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
       
-      // プレビュー幅を決定
-      let previewWidth = 400; // デフォルト値（1小節）
+      const trackRect = trackElement.getBoundingClientRect();
+      const tracksAreaRect = timelineRef.current.getBoundingClientRect();
       
-      if (draggedClip) {
-        // 既存クリップの場合
-        previewWidth = isFinite(draggedClip.duration) && draggedClip.duration > 0 
-          ? draggedClip.duration 
-          : 400;
-        console.log('既存クリップのプレビュー幅:', previewWidth);
-      } else {
-        // 新しい音素材の場合、事前に計算された長さを使用
-        previewWidth = draggedSoundDuration;
-        console.log('新しい音素材のプレビュー幅:', previewWidth, '(draggedSoundDuration)');
+      if (tracksAreaRect && trackElement.dataset && trackElement.dataset.trackId) {
+        const relativeTop = trackRect.top - tracksAreaRect.top;
+        const trackId = parseInt(trackElement.dataset.trackId);
+        
+        // trackIdが有効な数値かチェック
+        if (isNaN(trackId)) {
+          return;
+        }
+        
+        // プレビュー幅を決定
+        let previewWidth = 400; // デフォルト値（1小節）
+        
+        if (draggedClip) {
+          // 既存クリップの場合
+          previewWidth = isFinite(draggedClip.duration) && draggedClip.duration > 0 
+            ? draggedClip.duration 
+            : 400;
+        } else {
+          // 新しい音素材の場合、事前に計算された長さを使用
+          previewWidth = draggedSoundDuration;
+        }
+        
+        setDragPreview({
+          left: snappedPosition,
+          top: relativeTop + 10,
+          width: previewWidth,
+          trackId: trackId
+        });
       }
-      
-      setDragPreview({
-        left: snappedPosition,
-        top: relativeTop + 10,
-        width: previewWidth,
-        trackId: trackId
-      });
+    } catch (error) {
+      console.warn('ドラッグプレビュー更新エラー:', error);
+      // エラーが発生した場合はプレビューをクリア
+      setDragPreview(null);
     }
   };
 
@@ -736,6 +773,13 @@ const DAWPage = () => {
     if (draggedClip && e && e.dataTransfer && e.dataTransfer.dropEffect === 'none') {
       console.log('ドラッグがキャンセルされました。元の位置を保持します。');
     }
+    
+    // ドラッグオーバーのタイムアウトをクリア
+    if (dragOverTimeoutRef.current) {
+      clearTimeout(dragOverTimeoutRef.current);
+      dragOverTimeoutRef.current = null;
+    }
+    
     setDraggedClip(null);
     setDragPreview(null);
     setDraggedSoundDuration(400); // リセット
