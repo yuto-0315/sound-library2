@@ -251,6 +251,66 @@
   color: #0d47a1;
 }
 
+/* 音声レベルメーター */
+.recording-status {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.audio-level-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px solid #e9ecef;
+}
+
+.audio-level-label {
+  font-weight: bold;
+  color: var(--text-color);
+  white-space: nowrap;
+}
+
+.audio-level-bar {
+  flex: 1;
+  height: 20px;
+  background: #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.audio-level-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
+  transition: width 0.1s ease;
+  border-radius: 10px;
+}
+
+.audio-level-value {
+  font-weight: bold;
+  color: var(--text-color);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .audio-level-meter {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .audio-level-label,
+  .audio-level-value {
+    align-self: flex-start;
+  }
+}
+
 /* iPad向けのレスポンシブデザイン */
 @media (max-width: 768px) {
   .collection-actions {
