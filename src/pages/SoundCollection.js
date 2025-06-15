@@ -41,40 +41,107 @@ const SoundCollection = () => {
 
       console.log('録音開始処理中...');
       
+      // iPad用の音声設定を最適化
+      const audioConstraints = {
+        echoCancellation: false, // iPadでは無効にする
+        noiseSuppression: false, // iPadでは無効にする  
+        autoGainControl: false,  // iPadでは無効にする
+        sampleRate: 44100,       // 明示的にサンプルレートを指定
+        channelCount: 1          // モノラル録音を明示
+      };
+      
+      console.log('音声制約:', audioConstraints);
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+        audio: audioConstraints
       });
       
       console.log('録音ストリーム取得成功');
+      console.log('ストリーム詳細:', {
+        id: stream.id,
+        active: stream.active,
+        tracks: stream.getTracks().map(track => ({
+          id: track.id,
+          kind: track.kind,
+          label: track.label,
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          settings: track.getSettings ? track.getSettings() : 'getSettings not supported'
+        }))
+      });
       
       // 音声レベル監視のためのAudioContextを設定
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('AudioContext作成:', {
+        state: audioCtx.state,
+        sampleRate: audioCtx.sampleRate,
+        baseLatency: audioCtx.baseLatency
+      });
+      
+      // AudioContextが停止している場合は再開
+      if (audioCtx.state === 'suspended') {
+        console.log('AudioContextを再開中...');
+        await audioCtx.resume();
+        console.log('AudioContext再開完了:', audioCtx.state);
+      }
+      
       const source = audioCtx.createMediaStreamSource(stream);
       const analyserNode = audioCtx.createAnalyser();
       analyserNode.fftSize = 256;
+      analyserNode.smoothingTimeConstant = 0.8; // スムージングを追加
       source.connect(analyserNode);
+      
+      console.log('AudioContext接続完了:', {
+        analyserFFTSize: analyserNode.fftSize,
+        frequencyBinCount: analyserNode.frequencyBinCount,
+        smoothingTimeConstant: analyserNode.smoothingTimeConstant
+      });
       
       setAudioContext(audioCtx);
       
       // 音声レベル監視開始
       monitorAudioLevel(analyserNode);
       
-      const recorder = new MediaRecorder(stream);
+      // MediaRecorderのオプションを決定
+      let recorderOptions = {};
+      
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        recorderOptions.mimeType = 'audio/webm;codecs=opus';
+        console.log('使用するMIMEタイプ: audio/webm;codecs=opus');
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        recorderOptions.mimeType = 'audio/mp4';
+        console.log('使用するMIMEタイプ: audio/mp4');
+      } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+        recorderOptions.mimeType = 'audio/wav';
+        console.log('使用するMIMEタイプ: audio/wav');
+      } else {
+        console.log('デフォルトMIMEタイプを使用');
+      }
+      
+      const recorder = new MediaRecorder(stream, recorderOptions);
+      console.log('MediaRecorder作成:', {
+        mimeType: recorder.mimeType,
+        state: recorder.state,
+        supportedTypes: {
+          'audio/webm;codecs=opus': MediaRecorder.isTypeSupported('audio/webm;codecs=opus'),
+          'audio/mp4': MediaRecorder.isTypeSupported('audio/mp4'),
+          'audio/wav': MediaRecorder.isTypeSupported('audio/wav')
+        }
+      });
+      
       const chunks = [];
 
       recorder.ondataavailable = (e) => {
-        console.log('録音データ受信:', e.data.size, 'bytes');
+        console.log('録音データ受信:', e.data.size, 'bytes, type:', e.data.type);
         chunks.push(e.data);
       };
 
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/wav' });
         const url = URL.createObjectURL(blob);
-        console.log('録音完了 - Blobサイズ:', blob.size, 'bytes');
+        console.log('録音完了 - Blobサイズ:', blob.size, 'bytes, type:', blob.type);
+        console.log('チャンク数:', chunks.length, 'chunks');
         setCurrentRecording({
           id: Date.now(),
           url: url,
@@ -92,6 +159,7 @@ const SoundCollection = () => {
       };
 
       recorder.start();
+      console.log('録音開始:', recorder.state);
       setMediaRecorder(recorder);
       setIsRecording(true);
       console.log('録音開始完了');
@@ -270,11 +338,21 @@ const SoundCollection = () => {
     const bufferLength = analyserNode.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     
+    console.log('音声レベル監視開始 - bufferLength:', bufferLength);
+    
     const updateLevel = () => {
-      if (!isRecording) return;
+      if (!isRecording) {
+        console.log('録音停止のため音声レベル監視終了');
+        return;
+      }
       
       // 時間領域データを取得（周波数領域ではなく）
       analyserNode.getByteTimeDomainData(dataArray);
+      
+      // デバッグ用：最初の10サンプルをログ出力（最初の数秒のみ）
+      if (Math.random() < 0.01) { // 1%の確率でログ出力
+        console.log('音声データサンプル:', Array.from(dataArray.slice(0, 10)));
+      }
       
       // RMS（二乗平均平方根）を計算
       let sum = 0;
@@ -287,6 +365,11 @@ const SoundCollection = () => {
       // デシベルに変換して0-100の範囲にマッピング
       const db = 20 * Math.log10(rms + 0.0001); // 0.0001は-∞を防ぐため
       const level = Math.max(0, Math.min(100, ((db + 60) / 60) * 100)); // -60dBを0%、0dBを100%に
+      
+      // デバッグ用：レベルをログ出力（時々）
+      if (Math.random() < 0.01) { // 1%の確率でログ出力
+        console.log('音声レベル - RMS:', rms, 'dB:', db, 'Level:', level);
+      }
       
       setAudioLevel(level);
       
