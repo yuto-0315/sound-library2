@@ -77,9 +77,25 @@ const DAWPage = () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      // 再生中の音声をすべて停止・クリーンアップ
+      playingAudios.forEach(({ audio, timeoutId, audioUrl }) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        if (audio) {
+          audio.pause();
+          audio.src = '';
+        }
+        if (audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+        }
+      });
       // グローバル変数をクリーンアップ
       if (window.currentDraggedSoundBlob) {
         window.currentDraggedSoundBlob = null;
+      }
+      if (window.currentDraggedSound) {
+        window.currentDraggedSound = null;
       }
     };
   }, []);
@@ -1214,16 +1230,25 @@ const SoundItem = ({ sound, onDragStart }) => {
   const playSound = () => {
     if (sound.audioBlob && !isPlaying && !isDragging) {
       const audio = new Audio();
-      audio.src = URL.createObjectURL(sound.audioBlob);
+      const audioUrl = URL.createObjectURL(sound.audioBlob);
+      audio.src = audioUrl;
+      
       audio.play()
         .then(() => {
           setIsPlaying(true);
-          audio.addEventListener('ended', () => {
+          
+          const handleEnded = () => {
             setIsPlaying(false);
-          });
+            URL.revokeObjectURL(audioUrl); // URLをクリーンアップ
+            audio.removeEventListener('ended', handleEnded);
+          };
+          
+          audio.addEventListener('ended', handleEnded);
         })
         .catch(error => {
           console.error('音声再生エラー:', error);
+          URL.revokeObjectURL(audioUrl); // エラー時もクリーンアップ
+          setIsPlaying(false);
         });
     }
   };

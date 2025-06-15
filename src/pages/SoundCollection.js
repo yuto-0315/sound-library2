@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SoundCollection.css';
 
 const SoundCollection = () => {
@@ -7,6 +7,26 @@ const SoundCollection = () => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [currentRecording, setCurrentRecording] = useState(null);
   const fileInputRef = useRef(null);
+
+  // コンポーネントアンマウント時のクリーンアップ
+  useEffect(() => {
+    return () => {
+      // 録音中の場合は停止
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        if (mediaRecorder.stream) {
+          mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        }
+      }
+      
+      // 作成されたBlobURLをクリーンアップ
+      recordings.forEach(recording => {
+        if (recording.url && recording.url.startsWith('blob:')) {
+          URL.revokeObjectURL(recording.url);
+        }
+      });
+    };
+  }, [mediaRecorder, isRecording, recordings]);
 
   const startRecording = async () => {
     try {
