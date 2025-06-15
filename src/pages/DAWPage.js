@@ -1215,22 +1215,7 @@ const SoundItem = ({ sound, onDragStart }) => {
     setTouchStart({ x: touch.clientX, y: touch.clientY });
     setIsDragging(false);
     
-    // 長押し判定用のタイマー
-    setTimeout(() => {
-      if (touchStart && !isDragging) {
-        setIsDragging(true);
-        // スクロールを一時的に無効化
-        document.body.classList.add('dragging');
-        
-        // 親コンポーネントのonDragStart関数を呼び出し
-        if (onDragStart) {
-          onDragStart(sound);
-        }
-        // グローバル変数に設定
-        window.currentDraggedSoundBlob = sound.audioBlob;
-        window.currentDraggedSound = sound;
-      }
-    }, 200); // 200ms長押しで開始
+    // 長押し判定用のタイマーは設定せず、移動検知でのみドラッグを開始
   };
 
   const handleTouchMove = (e) => {
@@ -1240,12 +1225,15 @@ const SoundItem = ({ sound, onDragStart }) => {
     const currentPos = { x: touch.clientX, y: touch.clientY };
     setTouchMove(currentPos);
     
-    // ドラッグ開始の判定（10px以上移動）
+    // ドラッグ開始の判定（15px以上移動）- 閾値を上げてより意図的な移動のみドラッグ扱い
     const deltaX = Math.abs(currentPos.x - touchStart.x);
     const deltaY = Math.abs(currentPos.y - touchStart.y);
     
-    if (!isDragging && (deltaX > 10 || deltaY > 10)) {
+    if (!isDragging && (deltaX > 15 || deltaY > 15)) {
       setIsDragging(true);
+      // スクロールを一時的に無効化（移動が確定してから）
+      document.body.classList.add('dragging');
+      
       // 親コンポーネントのonDragStart関数を呼び出し
       if (onDragStart) {
         onDragStart(sound);
@@ -1635,8 +1623,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     setTouchStart({ x: touch.clientX, y: touch.clientY });
     setIsDragging(false);
     
-    // ドラッグモードを有効化
-    document.body.classList.add('dragging');
+    // ドラッグモードは移動が確定してから有効化
   };
 
   const handleTouchMove = (e) => {
@@ -1646,12 +1633,14 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     const currentPos = { x: touch.clientX, y: touch.clientY };
     setTouchMove(currentPos);
     
-    // ドラッグ開始の判定（5px以上移動）
+    // ドラッグ開始の判定（10px以上移動）
     const deltaX = Math.abs(currentPos.x - touchStart.x);
     const deltaY = Math.abs(currentPos.y - touchStart.y);
     
-    if (!isDragging && (deltaX > 5 || deltaY > 5)) {
+    if (!isDragging && (deltaX > 10 || deltaY > 10)) {
       setIsDragging(true);
+      // スクロールを一時的に無効化（移動が確定してから）
+      document.body.classList.add('dragging');
       onDragStart(clip, trackId);
     }
     
