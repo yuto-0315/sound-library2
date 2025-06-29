@@ -171,6 +171,22 @@ const SoundLibrary = () => {
 
 const LibrarySoundCard = ({ sound, onDelete }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(null);
+
+  // コンポーネントマウント時にBlob URLを作成
+  useEffect(() => {
+    if (sound.audioBlob) {
+      const url = URL.createObjectURL(sound.audioBlob);
+      setAudioUrl(url);
+      
+      // クリーンアップ関数
+      return () => {
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
+      };
+    }
+  }, [sound.audioBlob]);
 
   const handleDelete = () => {
     onDelete(sound.id);
@@ -214,7 +230,14 @@ const LibrarySoundCard = ({ sound, onDelete }) => {
         )}
       </div>
 
-      <audio controls src={sound.url} className="sound-player" />
+      <audio 
+        controls 
+        src={audioUrl} 
+        className="sound-player"
+        onError={(e) => {
+          console.error('音声の読み込みエラー:', e, 'sound:', sound.name);
+        }}
+      />
       
       <div className="drag-hint">
         🎵 DAWページにドラッグ&ドロップできます

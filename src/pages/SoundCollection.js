@@ -200,8 +200,10 @@ const SoundCollection = () => {
     }
     
     // AudioContextをクリーンアップ
-    if (audioContext) {
-      audioContext.close();
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(error => {
+        console.warn('SoundCollection AudioContext のクローズに失敗:', error);
+      });
       setAudioContext(null);
     }
   };
@@ -502,7 +504,14 @@ const RecordingEditor = ({ recording, onSave, onCancel }) => {
     <div className="recording-editor card">
       <h3>✏️ 音に名前をつけよう</h3>
       
-      <audio controls src={recording.url} className="audio-preview" />
+      <audio 
+        controls 
+        src={recording.url} 
+        className="audio-preview"
+        onError={(e) => {
+          console.error('音声プレビューの読み込みエラー:', e);
+        }}
+      />
       
       <div className="form-group">
         <label htmlFor="soundName">音の名前:</label>
@@ -575,7 +584,13 @@ const SoundCard = ({ recording }) => {
           </div>
         )}
       </div>
-      <audio controls src={recording.url} />
+      <audio 
+        controls 
+        src={recording.url}
+        onError={(e) => {
+          console.error('音声カードの読み込みエラー:', e, 'recording:', recording.name);
+        }}
+      />
     </div>
   );
 };

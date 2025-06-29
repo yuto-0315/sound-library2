@@ -31,8 +31,20 @@ const DAWPage = () => {
           trackIdCounterRef.current = projectData.trackIdCounter;
         }
         
+        // 無効なクリップをフィルタリング
+        const validTracks = (projectData.tracks || []).map(track => ({
+          ...track,
+          clips: (track.clips || []).filter(clip => {
+            if (!clip.soundData || !clip.soundData.name) {
+              console.warn('自動保存データから無効なクリップを除外:', clip);
+              return false;
+            }
+            return true;
+          })
+        }));
+        
         return {
-          tracks: projectData.tracks || [{ 
+          tracks: validTracks.length > 0 ? validTracks : [{ 
             id: Date.now(), 
             name: 'トラック 1', 
             clips: [] 
@@ -163,8 +175,10 @@ const DAWPage = () => {
     }
     
     return () => {
-      if (ctx) {
-        ctx.close();
+      if (ctx && ctx.state !== 'closed') {
+        ctx.close().catch(error => {
+          console.warn('初期AudioContext のクローズに失敗:', error);
+        });
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -407,10 +421,19 @@ const DAWPage = () => {
         if (projectData.tracks) {
           const restoredTracks = projectData.tracks.map(track => ({
             ...track,
-            clips: track.clips.map(clip => ({
-              ...clip,
-              soundData: restoreAudioBlob(clip.soundData)
-            }))
+            clips: track.clips
+              .map(clip => ({
+                ...clip,
+                soundData: restoreAudioBlob(clip.soundData)
+              }))
+              .filter(clip => {
+                // 無効なクリップを除外
+                if (!clip.soundData || !clip.soundData.name) {
+                  console.warn('無効なクリップを除外:', clip);
+                  return false;
+                }
+                return true;
+              })
           }));
           setTracks(restoredTracks);
           console.log('トラックデータを復元しました:', restoredTracks.length, 'トラック');
@@ -566,7 +589,11 @@ const DAWPage = () => {
       URL.revokeObjectURL(url);
       
       console.log('音源を出力しました');
-      await exportContext.close();
+      if (exportContext && exportContext.state !== 'closed') {
+        await exportContext.close().catch(error => {
+          console.warn('Export AudioContext のクローズに失敗:', error);
+        });
+      }
     } catch (error) {
       console.error('音源出力エラー:', error);
       setError('音源の出力に失敗しました。');
@@ -723,6 +750,13 @@ const DAWPage = () => {
         setError('音素材データが見つかりません。再度お試しください。');
         return;
       }
+
+      // soundDataの必要なプロパティをチェック
+      if (!soundData.name) {
+        console.error('音素材の名前が見つかりません:', soundData);
+        setError('音素材の名前が不正です。再度お試しください。');
+        return;
+      }
       
       // グローバル変数からaudioBlobを復元
       if (window.currentDraggedSoundBlob) {
@@ -872,6 +906,42 @@ const DAWPage = () => {
     setDraggedClip({ ...clip, originalTrackId });
   };
 
+  // ドラッグ状態の完全なクリーンアップ
+  const cleanupDragState = useCallback(() => {
+    // ドラッグオーバーのタイムアウトをクリア
+    if (dragOverTimeoutRef.current) {
+      clearTimeout(dragOverTimeoutRef.current);
+      dragOverTimeoutRef.current = null;
+    }
+    
+    // すべてのドラッグ関連の状態をリセット
+    setDraggedClip(null);
+    setDragPreview(null);
+    setDraggedSoundDuration(400);
+    
+    // DOM要素のクリーンアップ
+    document.querySelectorAll('.track').forEach(track => {
+      track.classList.remove('drag-over');
+    });
+    
+    // モバイル用のドラッグプレビューを削除
+    const mobileDragPreview = document.querySelector('.mobile-drag-preview');
+    if (mobileDragPreview) {
+      mobileDragPreview.remove();
+    }
+    
+    // グローバル変数のクリーンアップ
+    if (window.currentDraggedSoundBlob) {
+      window.currentDraggedSoundBlob = null;
+    }
+    if (window.currentDraggedSound) {
+      window.currentDraggedSound = null;
+    }
+    
+    // ボディクラスのクリーンアップ
+    document.body.classList.remove('dragging');
+  }, []);
+
   // ドラッグ終了時のクリーンアップ
   const handleDragEnd = (e) => {
     // ドロップが正常に処理されなかった場合、元の状態を保持
@@ -879,15 +949,8 @@ const DAWPage = () => {
       console.log('ドラッグがキャンセルされました。元の位置を保持します。');
     }
     
-    // ドラッグオーバーのタイムアウトをクリア
-    if (dragOverTimeoutRef.current) {
-      clearTimeout(dragOverTimeoutRef.current);
-      dragOverTimeoutRef.current = null;
-    }
-    
-    setDraggedClip(null);
-    setDragPreview(null);
-    setDraggedSoundDuration(400); // リセット
+    // 完全なクリーンアップ
+    cleanupDragState();
   };
 
   const play = async () => {
@@ -1141,6 +1204,82 @@ const DAWPage = () => {
       setError('プロジェクトのリセットに失敗しました');
     }
   };
+
+  // 無効なクリップを除外する関数
+  const cleanupInvalidClips = () => {
+    setTracks(prevTracks => {
+      const cleanedTracks = prevTracks.map(track => ({
+        ...track,
+        clips: track.clips.filter(clip => {
+          if (!clip.soundData || !clip.soundData.name) {
+            console.warn('無効なクリップを除外:', clip);
+            return false;
+          }
+          return true;
+        })
+      }));
+      
+      const removedCount = prevTracks.reduce((total, track) => total + track.clips.length, 0) - 
+                          cleanedTracks.reduce((total, track) => total + track.clips.length, 0);
+      
+      if (removedCount > 0) {
+        console.log(`${removedCount}個の無効なクリップを除外しました`);
+      }
+      
+      return cleanedTracks;
+    });
+  };
+
+  // 初期化時に無効なクリップをクリーンアップ
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      cleanupInvalidClips();
+    }, 1000); // 1秒後に実行
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // コンポーネントアンマウント時の包括的クリーンアップ
+  useEffect(() => {
+    return () => {
+      // ドラッグ状態のクリーンアップ
+      cleanupDragState();
+      
+      // 再生中の音声をすべて停止
+      setPlayingAudios(currentPlayingAudios => {
+        currentPlayingAudios.forEach(({ audio, timeoutId, audioUrl }) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          if (audio) {
+            audio.pause();
+            audio.src = '';
+          }
+          if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+          }
+        });
+        return new Map();
+      });
+      
+      // AudioContextをクリーンアップ
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close().catch(error => {
+          console.warn('AudioContext のクローズに失敗:', error);
+        });
+      }
+      
+      // アニメーションフレームをクリア
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      // タイムアウトをクリア
+      if (dragOverTimeoutRef.current) {
+        clearTimeout(dragOverTimeoutRef.current);
+      }
+    };
+  }, [cleanupDragState, audioContext]);
 
   return (
     <div className="daw-page">
@@ -1471,6 +1610,8 @@ const SoundItem = ({ sound, onDragStart }) => {
     setTouchStart(null);
     setTouchMove(null);
     setIsDragging(false);
+    
+    // SoundItem 内での直接クリーンアップ
     document.body.classList.remove('dragging');
     
     // ハイライトを削除
@@ -1478,15 +1619,19 @@ const SoundItem = ({ sound, onDragStart }) => {
       track.classList.remove('drag-over');
     });
     
-    // ドラッグプレビューを削除
-    const dragPreview = document.querySelector('.mobile-drag-preview');
-    if (dragPreview) {
-      dragPreview.remove();
+    // モバイル用のドラッグプレビューを削除
+    const mobileDragPreview = document.querySelector('.mobile-drag-preview');
+    if (mobileDragPreview) {
+      mobileDragPreview.remove();
     }
     
     // グローバル変数をクリア
-    window.currentDraggedSoundBlob = null;
-    window.currentDraggedSound = null;
+    if (window.currentDraggedSoundBlob) {
+      window.currentDraggedSoundBlob = null;
+    }
+    if (window.currentDraggedSound) {
+      window.currentDraggedSound = null;
+    }
   };
 
   const playSound = () => {
@@ -1767,18 +1912,27 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
   const [touchMove, setTouchMove] = React.useState(null);
 
   React.useEffect(() => {
-    // 簡単な波形データ生成（実際の実装では音声解析が必要）
-    const generateWaveform = () => {
-      const points = 20; // 波形のポイント数
-      const data = [];
-      for (let i = 0; i < points; i++) {
-        data.push(Math.random() * 0.8 + 0.2); // 0.2-1.0の間のランダム値
-      }
-      setWaveformData(data);
-    };
+    // clip.soundData が存在する場合のみ波形データを生成
+    if (clip && clip.soundData) {
+      // 簡単な波形データ生成（実際の実装では音声解析が必要）
+      const generateWaveform = () => {
+        const points = 20; // 波形のポイント数
+        const data = [];
+        for (let i = 0; i < points; i++) {
+          data.push(Math.random() * 0.8 + 0.2); // 0.2-1.0の間のランダム値
+        }
+        setWaveformData(data);
+      };
 
-    generateWaveform();
-  }, [clip.soundData]);
+      generateWaveform();
+    }
+  }, [clip, clip?.soundData]);
+
+  // clip.soundData の安全性をチェック（Hooksの後で）
+  if (!clip || !clip.soundData) {
+    console.warn('無効なクリップデータ:', clip);
+    return null; // 無効なクリップは表示しない
+  }
 
   const handleDragStart = (e) => {
     e.stopPropagation(); // イベントバブリングを防ぐ
@@ -1873,6 +2027,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
       track.classList.remove('drag-over');
     });
     
+    // ドラッグプレビューをクリア（親コンポーネントの状態もリセット）
     if (onDragEnd) {
       onDragEnd(null); // nullを渡してガード条件を満たす
     }
@@ -1893,7 +2048,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
       }}
     >
       <div className="clip-header">
-        <span className="clip-name">{clip.soundData.name}</span>
+        <span className="clip-name">{clip.soundData?.name || '不明な音素材'}</span>
         <button 
           className="remove-clip-btn"
           onClick={onRemove}
