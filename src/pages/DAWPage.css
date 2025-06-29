@@ -964,3 +964,53 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
+
+/* 警告ボタン（リセットボタン）のスタイル */
+.button-warning {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+}
+
+.button-warning:hover {
+  background: linear-gradient(135deg, #f57c00, #e65100);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.4);
+}
+
+.button-warning:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+}
+
+/* 自動保存情報セクションのスタイル */
+.auto-save-info {
+  margin-top: 20px;
+  padding: 15px;
+  background: linear-gradient(135deg, #e8f5e8, #f1f8f1);
+  border-radius: 8px;
+  border-left: 4px solid #4caf50;
+}
+
+.auto-save-info h4 {
+  color: #2e7d32;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.auto-save-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.auto-save-info li {
+  margin-bottom: 5px;
+  color: #388e3c;
+}

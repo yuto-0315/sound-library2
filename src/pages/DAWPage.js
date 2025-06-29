@@ -15,12 +15,48 @@ const DAWPage = () => {
   // トラック名の番号管理用カウンター
   const trackNameCounterRef = useRef(1);
   
-  const [tracks, setTracks] = useState(() => [{ 
-    id: Date.now(), 
-    name: 'トラック 1', 
-    clips: [] 
-  }]);
-  const [bpm, setBpm] = useState(120);
+  // LocalStorageからの自動復元機能
+  const loadAutoSavedProject = () => {
+    try {
+      const autoSavedData = localStorage.getItem('dawProjectAutoSave');
+      if (autoSavedData) {
+        const projectData = JSON.parse(autoSavedData);
+        console.log('自動保存データを復元中...', projectData);
+        
+        // トラックカウンターの復元
+        if (projectData.trackNameCounter) {
+          trackNameCounterRef.current = projectData.trackNameCounter;
+        }
+        if (projectData.trackIdCounter) {
+          trackIdCounterRef.current = projectData.trackIdCounter;
+        }
+        
+        return {
+          tracks: projectData.tracks || [{ 
+            id: Date.now(), 
+            name: 'トラック 1', 
+            clips: [] 
+          }],
+          bpm: projectData.bpm || 120
+        };
+      }
+    } catch (error) {
+      console.error('自動保存データの復元に失敗:', error);
+    }
+    
+    return {
+      tracks: [{ 
+        id: Date.now(), 
+        name: 'トラック 1', 
+        clips: [] 
+      }],
+      bpm: 120
+    };
+  };
+
+  const initialData = loadAutoSavedProject();
+  const [tracks, setTracks] = useState(initialData.tracks);
+  const [bpm, setBpm] = useState(initialData.bpm);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [audioContext, setAudioContext] = useState(null);
@@ -422,6 +458,20 @@ const DAWPage = () => {
         
         console.log('プロジェクトを読み込みました');
         setError(null);
+        
+        // 読み込み後に自動保存データも更新
+        setTimeout(() => {
+          const autoSaveData = {
+            version: '1.0',
+            bpm: projectData.bpm || 120,
+            tracks: projectData.tracks || [],
+            timestamp: Date.now(),
+            trackNameCounter: projectData.trackNameCounter || 1,
+            trackIdCounter: projectData.trackIdCounter || 1
+          };
+          localStorage.setItem('dawProjectAutoSave', JSON.stringify(autoSaveData));
+          console.log('読み込み後の自動保存データを更新しました');
+        }, 100);
       } catch (error) {
         console.error('プロジェクト読み込みエラー:', error);
         setError('プロジェクトファイルの読み込みに失敗しました。ファイルが正しいか確認してください。');
@@ -988,6 +1038,110 @@ const DAWPage = () => {
     setPlayingAudios(new Map());
   };
 
+  // タイムラインデータの自動保存機能
+  useEffect(() => {
+    const autoSaveProject = () => {
+      try {
+        const projectData = {
+          version: '1.0',
+          bpm: bpm,
+          tracks: tracks,
+          timestamp: Date.now(),
+          trackNameCounter: trackNameCounterRef.current,
+          trackIdCounter: trackIdCounterRef.current
+        };
+
+        localStorage.setItem('dawProjectAutoSave', JSON.stringify(projectData));
+        console.log('プロジェクトを自動保存しました:', {
+          tracksCount: tracks.length,
+          bpm: bpm,
+          totalClips: tracks.reduce((total, track) => total + track.clips.length, 0)
+        });
+      } catch (error) {
+        console.error('プロジェクトの自動保存に失敗:', error);
+      }
+    };
+
+    // 初期化後の自動保存（tracksやbpmが変更された時）
+    if (tracks.length > 0) {
+      autoSaveProject();
+    }
+  }, [tracks, bpm]);
+
+  // 音素材の更新監視（他のページで音が追加された場合の対応）
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // ページが表示されたときに音素材を再読み込み
+        const savedSounds = JSON.parse(localStorage.getItem('soundRecordings') || '[]');
+        console.log('ページ表示時の音素材再読み込み - 件数:', savedSounds.length);
+        
+        // 音声データ復元処理（既存のロジックを再利用）
+        const soundsWithBlob = savedSounds.map(sound => {
+          if (sound.audioData) {
+            try {
+              const base64Data = sound.audioData.split(',')[1];
+              if (!base64Data || base64Data.length === 0) {
+                return sound;
+              }
+              
+              const byteCharacters = atob(base64Data);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], { type: 'audio/wav' });
+              
+              return { ...sound, audioBlob: blob };
+            } catch (error) {
+              console.error('音声データの復元に失敗:', sound.name, error);
+              return sound;
+            }
+          }
+          return sound;
+        });
+        
+        const validSounds = soundsWithBlob.filter(sound => 
+          sound.audioBlob && sound.audioBlob instanceof Blob && sound.audioBlob.size > 0
+        );
+        
+        setSounds(validSounds);
+        console.log('音素材更新完了 - 有効件数:', validSounds.length);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // 自動保存データをクリアする機能
+  const clearAutoSave = () => {
+    try {
+      localStorage.removeItem('dawProjectAutoSave');
+      console.log('自動保存データをクリアしました');
+      
+      // 初期状態にリセット
+      setTracks([{ 
+        id: Date.now(), 
+        name: 'トラック 1', 
+        clips: [] 
+      }]);
+      setBpm(120);
+      trackNameCounterRef.current = 1;
+      trackIdCounterRef.current = 1;
+      
+      setError(null);
+      alert('✅ プロジェクトをリセットしました');
+    } catch (error) {
+      console.error('自動保存データのクリアに失敗:', error);
+      setError('プロジェクトのリセットに失敗しました');
+    }
+  };
+
   return (
     <div className="daw-page">
       <h2>🎹 音楽づくりページ</h2>
@@ -1051,6 +1205,17 @@ const DAWPage = () => {
               style={{ display: 'none' }}
             />
           </label>
+          <button 
+            className="button-warning" 
+            onClick={() => {
+              if (window.confirm('🗑️ プロジェクトをリセットしますか？\n\n現在の作業内容がすべて削除されます。')) {
+                clearAutoSave();
+              }
+            }}
+            title="プロジェクトをリセット（自動保存データもクリア）"
+          >
+            🗑️ リセット
+          </button>
           <button 
             className="button-primary" 
             onClick={exportAudio}
@@ -1169,7 +1334,17 @@ const DAWPage = () => {
           <li><strong>💾 プロジェクト保存:</strong> 編集中のデータをJSONファイルとして保存</li>
           <li><strong>📁 プロジェクト読み込み:</strong> 保存したプロジェクトファイルを読み込んで編集を再開</li>
           <li><strong>🎧 音源出力:</strong> 完成した楽曲をWAVファイルとして出力</li>
+          <li><strong>🗑️ リセット:</strong> 現在のプロジェクトをリセットして新しく始める</li>
         </ul>
+        <div className="auto-save-info">
+          <h4>💾 自動保存機能</h4>
+          <ul>
+            <li><strong>自動保存:</strong> トラックやBPMの変更は自動的に保存されます</li>
+            <li><strong>他ページとの連携:</strong> 「音あつめ」ページで録音した音は自動的に反映されます</li>
+            <li><strong>復元機能:</strong> ページをリロードしても作業内容が自動的に復元されます</li>
+            <li><strong>安心して移動:</strong> 他のページに移動しても作業内容は保持されます</li>
+          </ul>
+        </div>
         <div className="mobile-tips">
           <h4>📱 スマートフォン利用のコツ</h4>
           <ul>
