@@ -7,10 +7,7 @@ const SoundCollection = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [currentRecording, setCurrentRecording] = useState(null);
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [audioContext, setAudioContext] = useState(null);
   const fileInputRef = useRef(null);
-  const animationFrameRef = useRef(null);
   const recordButtonRef = useRef(null);
 
   // アクセシビリティフック
@@ -82,38 +79,6 @@ const SoundCollection = () => {
         }))
       });
       
-      // 音声レベル監視のためのAudioContextを設定
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      console.log('AudioContext作成:', {
-        state: audioCtx.state,
-        sampleRate: audioCtx.sampleRate,
-        baseLatency: audioCtx.baseLatency
-      });
-      
-      // AudioContextが停止している場合は再開
-      if (audioCtx.state === 'suspended') {
-        console.log('AudioContextを再開中...');
-        await audioCtx.resume();
-        console.log('AudioContext再開完了:', audioCtx.state);
-      }
-      
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyserNode = audioCtx.createAnalyser();
-      analyserNode.fftSize = 256;
-      analyserNode.smoothingTimeConstant = 0.8; // スムージングを追加
-      source.connect(analyserNode);
-      
-      console.log('AudioContext接続完了:', {
-        analyserFFTSize: analyserNode.fftSize,
-        frequencyBinCount: analyserNode.frequencyBinCount,
-        smoothingTimeConstant: analyserNode.smoothingTimeConstant
-      });
-      
-      setAudioContext(audioCtx);
-      
-      // 音声レベル監視開始
-      monitorAudioLevel(analyserNode);
-      
       // MediaRecorderのオプションを決定
       let recorderOptions = {};
       
@@ -162,12 +127,6 @@ const SoundCollection = () => {
           createdAt: new Date()
         });
         
-        // 音声レベル監視停止
-        setAudioLevel(0);
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        
         announce('録音が完了しました。音に名前をつけて保存してください。', 'assertive');
       };
 
@@ -201,27 +160,17 @@ const SoundCollection = () => {
   };
 
   const stopRecording = () => {
+    console.log('録音停止開始');
+    setIsRecording(false); // まず録音状態を停止に設定
+    
     if (mediaRecorder) {
       mediaRecorder.stop();
       mediaRecorder.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
       setMediaRecorder(null);
       announce('録音を停止しました。', 'assertive');
     }
     
-    // 音声レベル監視を停止
-    setAudioLevel(0);
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    
-    // AudioContextをクリーンアップ
-    if (audioContext && audioContext.state !== 'closed') {
-      audioContext.close().catch(error => {
-        console.warn('SoundCollection AudioContext のクローズに失敗:', error);
-      });
-      setAudioContext(null);
-    }
+    console.log('録音停止完了');
   };
 
   // Blobを Base64 に変換する関数
@@ -352,53 +301,6 @@ const SoundCollection = () => {
   };
 
   // 音声レベル監視関数
-  const monitorAudioLevel = (analyserNode) => {
-    const bufferLength = analyserNode.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    console.log('音声レベル監視開始 - bufferLength:', bufferLength);
-    
-    const updateLevel = () => {
-      if (!isRecording) {
-        console.log('録音停止のため音声レベル監視終了');
-        return;
-      }
-      
-      // 時間領域データを取得（周波数領域ではなく）
-      analyserNode.getByteTimeDomainData(dataArray);
-      
-      // デバッグ用：最初の10サンプルをログ出力（最初の数秒のみ）
-      if (Math.random() < 0.01) { // 1%の確率でログ出力
-        console.log('音声データサンプル:', Array.from(dataArray.slice(0, 10)));
-      }
-      
-      // RMS（二乗平均平方根）を計算
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const sample = (dataArray[i] - 128) / 128; // -1 to 1の範囲に正規化
-        sum += sample * sample;
-      }
-      const rms = Math.sqrt(sum / bufferLength);
-      
-      // デシベルに変換して0-100の範囲にマッピング
-      const db = 20 * Math.log10(rms + 0.0001); // 0.0001は-∞を防ぐため
-      const level = Math.max(0, Math.min(100, ((db + 60) / 60) * 100)); // -60dBを0%、0dBを100%に
-      
-      // デバッグ用：レベルをログ出力（時々）
-      if (Math.random() < 0.01) { // 1%の確率でログ出力
-        console.log('音声レベル - RMS:', rms, 'dB:', db, 'Level:', level);
-      }
-      
-      setAudioLevel(level);
-      
-      if (isRecording) {
-        animationFrameRef.current = requestAnimationFrame(updateLevel);
-      }
-    };
-    
-    updateLevel();
-  };
-
   return (
     <div className="sound-collection">
       <header>
@@ -473,24 +375,6 @@ const SoundCollection = () => {
               <div className="recording-indicator">
                 <div className="pulse-dot" aria-hidden="true"></div>
                 録音中...
-              </div>
-              <div className="audio-level-meter" role="group" aria-labelledby="audio-level-label">
-                <div id="audio-level-label" className="audio-level-label">音声入力レベル:</div>
-                <div 
-                  className="audio-level-bar" 
-                  role="progressbar"
-                  aria-valuenow={Math.round(audioLevel)}
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-label={`音声レベル ${Math.round(audioLevel)}%`}
-                >
-                  <div 
-                    className="audio-level-fill" 
-                    style={{ width: `${audioLevel}%` }}
-                    aria-hidden="true"
-                  ></div>
-                </div>
-                <div className="audio-level-value" aria-hidden="true">{Math.round(audioLevel)}%</div>
               </div>
             </div>
           )}

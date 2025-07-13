@@ -45,50 +45,86 @@
 }
 
 /* アクセシブルボタンスタイル */
-.record-btn {
+.accessible-button.record-btn,
+.accessible-button.button-primary.record-btn {
   background: linear-gradient(135deg, var(--warning-color), var(--warning-hover));
+  color: white;
   font-size: 16px;
   min-width: 180px;
   min-height: 48px;
   border: 2px solid transparent;
+  border-radius: 8px;
   font-weight: 600;
   padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
 }
 
-.record-btn:hover {
+.accessible-button.record-btn:hover,
+.accessible-button.button-primary.record-btn:hover {
   background: linear-gradient(135deg, var(--warning-hover), #B91C1C);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
-.record-btn:focus {
+.accessible-button.record-btn:focus,
+.accessible-button.button-primary.record-btn:focus {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
   border-color: #fff;
   background: linear-gradient(135deg, var(--warning-hover), #B91C1C);
 }
 
-.stop-btn {
-  background: linear-gradient(135deg, var(--safe-orange), var(--secondary-hover));
+.accessible-button.record-btn:active,
+.accessible-button.button-primary.record-btn:active {
+  transform: translateY(0);
+  background: linear-gradient(135deg, #B91C1C, #991B1B);
+}
+
+.accessible-button.stop-btn,
+.accessible-button.button-secondary.stop-btn {
+  background: linear-gradient(135deg, var(--safe-orange), var(--secondary-hover)) !important;
+  color: white !important;
   font-size: 16px;
   min-width: 180px;
   min-height: 48px;
   border: 2px solid transparent;
+  border-radius: 8px;
   font-weight: 600;
   padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
 }
 
-.stop-btn:hover {
-  background: linear-gradient(135deg, var(--secondary-hover), #E67300);
+.accessible-button.stop-btn:hover,
+.accessible-button.button-secondary.stop-btn:hover {
+  background: linear-gradient(135deg, var(--secondary-hover), #E67300) !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
 }
 
-.stop-btn:focus {
+.accessible-button.stop-btn:focus,
+.accessible-button.button-secondary.stop-btn:focus {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
   border-color: #fff;
-  background: linear-gradient(135deg, var(--secondary-hover), #E67300);
+  background: linear-gradient(135deg, var(--secondary-hover), #E67300) !important;
+}
+
+.accessible-button.stop-btn:active,
+.accessible-button.button-secondary.stop-btn:active {
+  transform: translateY(0);
+  background: linear-gradient(135deg, #E67300, #D85F00) !important;
 }
 
 /* アップロードボタン */
@@ -116,6 +152,16 @@
   background: linear-gradient(135deg, #1976D2, #1565C0);
 }
 
+/* 録音状態の表示 */
+.recording-status {
+  background: #fff;
+  border: 2px solid #ff4757;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 16px;
+  box-shadow: 0 4px 12px rgba(255, 71, 87, 0.15);
+}
+
 .recording-indicator {
   display: flex;
   align-items: center;
@@ -124,14 +170,20 @@
   color: #ff4757;
   font-weight: bold;
   font-size: 18px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: rgba(255, 71, 87, 0.1);
+  border-radius: 8px;
+  border: 2px solid rgba(255, 71, 87, 0.3);
 }
 
 .pulse-dot {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   background: #ff4757;
   border-radius: 50%;
-  animation: pulse 1.5s infinite;
+  animation: pulse 1.2s infinite;
+  box-shadow: 0 0 8px rgba(255, 71, 87, 0.5);
 }
 
 @keyframes pulse {
@@ -312,46 +364,6 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* 音声レベルメーター */
-.audio-level-meter {
-  margin-top: 15px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-}
-
-.audio-level-label {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: var(--text-color);
-}
-
-.audio-level-bar {
-  width: 100%;
-  height: 20px;
-  background: #e9ecef;
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-  border: 1px solid #adb5bd;
-}
-
-.audio-level-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #28a745 0%, #ffc107 70%, #dc3545 100%);
-  transition: width 0.1s ease;
-  border-radius: 10px;
-}
-
-.audio-level-value {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-align: center;
-  margin-top: 4px;
-}
-
 /* 録音リスト */
 .recent-recordings {
   margin-top: 40px;
@@ -443,6 +455,36 @@
   min-width: 160px;
   font-size: 16px;
   font-weight: 600;
+  border-radius: 8px;
+  padding: 12px 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* iOS向けの通知スタイル */
+.ios-notice {
+  background: #E3F2FD;
+  border: 2px solid #2196F3;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ios-notice p {
+  margin: 0 0 8px 0;
+}
+
+.ios-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.ios-notice strong {
+  color: #1976D2;
+  font-weight: 600;
 }
 
 /* レスポンシブデザイン */
@@ -477,9 +519,12 @@
     font-size: 14px;
   }
   
-  .record-btn, .stop-btn {
+  .accessible-button.record-btn, 
+  .accessible-button.stop-btn {
     font-size: 16px;
-    min-width: 180px;
+    min-width: 160px;
+    min-height: 48px;
+    padding: 12px 20px;
   }
   
   .tag-input-container {
@@ -520,6 +565,13 @@
     font-size: 14px;
     padding: 10px 16px;
   }
+  
+  .accessible-button.record-btn, 
+  .accessible-button.stop-btn {
+    min-width: 140px;
+    font-size: 15px;
+    padding: 10px 16px;
+  }
 }
 
 /* 高コントラストモード対応 */
@@ -538,10 +590,6 @@
     border: 2px solid #000;
     background: #fff;
   }
-  
-  .audio-level-bar {
-    border: 2px solid #000;
-  }
 }
 
 /* ダークモード対応 */
@@ -556,11 +604,6 @@
     background: #1e3a8a;
     border-color: #3b82f6;
     color: #fff;
-  }
-  
-  .audio-level-meter {
-    background: #333;
-    border-color: #555;
   }
   
   .no-recordings {
@@ -588,9 +631,5 @@
   
   .sound-card:hover {
     transform: none;
-  }
-  
-  .audio-level-fill {
-    transition: none;
   }
 }
