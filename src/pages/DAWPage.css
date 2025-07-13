@@ -14,7 +14,7 @@
 }
 
 .error-message {
-  background: linear-gradient(135deg, #ff5722, #f44336);
+  background: linear-gradient(135deg, var(--warning-color), var(--error-color));
   color: white;
   padding: 12px 16px;
   border-radius: 8px;
@@ -22,7 +22,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(255, 87, 34, 0.3);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
 }
 
 .error-message button {
@@ -54,6 +54,8 @@
   display: flex;
   gap: 10px;
   align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
 }
 
 .transport-btn {
@@ -67,21 +69,77 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 60px;
+  max-width: 60px;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+}
+
+.play-btn,
+.stop-btn {
+  /* 寸法の強制 */
+  width: 60px !important;
+  height: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+
+  /* 形状の強制 */
+  border-radius: 50% !important;
+
+  /* レイアウトの強制 */
+  padding: 0 !important;
+  margin: 0;
+  border: none !important;
+
+  /* フレックスボックスの設定 */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+
+  /* その他 */
+  cursor: pointer;
+  font-size: 24px;
+  transition: all 0.3s ease;
 }
 
 .play-btn {
-  background: linear-gradient(135deg, #4CAF50, #45a049);
+  background: linear-gradient(135deg, var(--success-color), #047857);
   color: white;
-  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.3);
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 50% !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  cursor: pointer;
+  font-size: 24px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease;
 }
 
 .play-btn:hover {
   transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+  box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+}
+
+.play-btn:focus {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 .play-btn.playing {
-  background: linear-gradient(135deg, #FF9800, #f57c00);
+  background: linear-gradient(135deg, var(--safe-orange), var(--secondary-hover));
   animation: pulse-play 1.5s infinite;
 }
 
@@ -91,14 +149,35 @@
 }
 
 .stop-btn {
-  background: linear-gradient(135deg, #f44336, #d32f2f);
+  background: linear-gradient(135deg, var(--warning-color), var(--warning-hover));
   color: white;
-  box-shadow: 0 4px 16px rgba(244, 67, 54, 0.3);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 50% !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  cursor: pointer;
+  font-size: 24px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease;
 }
 
 .stop-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
+}
+
+.stop-btn:focus {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 .bpm-control {
@@ -797,6 +876,16 @@
   .beat {
     min-width: 80px;
   }
+  
+  /* トランスポートボタンのサイズを維持 */
+  .transport-btn,
+  .play-btn,
+  .stop-btn {
+    width: 60px !important;
+    height: 60px !important;
+    min-width: 60px;
+    max-width: 60px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -868,6 +957,26 @@
   .daw-page {
     min-height: auto;
     padding-bottom: 20px;
+  }
+}
+
+/* モバイル向けトランスポートボタンサイズ調整 */
+@media (max-width: 768px) {
+  /* トランスポートコントロールの調整 */
+  .transport-btn {
+    width: 50px !important;
+    height: 50px !important;
+    font-size: 20px;
+    min-width: 50px;
+    max-width: 50px;
+  }
+  
+  .play-btn,
+  .stop-btn {
+    width: 50px !important;
+    height: 50px !important;
+    min-width: 50px;
+    max-width: 50px;
   }
 }
 
@@ -947,47 +1056,138 @@
   transform: none;
 }
 
+/* DAWページ共通ボタンスタイル（円形ボタンは除外） */
+.daw-controls button:not(.play-btn):not(.stop-btn),
+.controls button:not(.play-btn):not(.stop-btn),
+.project-controls button:not(.play-btn):not(.stop-btn),
+.daw-controls .accessible-button:not(.play-btn):not(.stop-btn),
+.controls .accessible-button:not(.play-btn):not(.stop-btn),
+.project-controls .accessible-button:not(.play-btn):not(.stop-btn) {
+  min-width: 120px;
+  min-height: 48px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+/* プライマリボタン（青系） */
+.button-primary,
+.daw-controls .btn-primary,
+.controls .btn-primary {
+  background: linear-gradient(135deg, var(--safe-blue), var(--primary-hover));
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.button-primary:hover,
+.daw-controls .btn-primary:hover,
+.controls .btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-hover), #0052A3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 102, 204, 0.4);
+}
+
+/* セカンダリボタン（オレンジ系） */
+.button-secondary,
+.daw-controls .btn-secondary,
+.controls .btn-secondary {
+  background: linear-gradient(135deg, var(--safe-orange), var(--secondary-hover));
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+}
+
+.button-secondary:hover,
+.daw-controls .btn-secondary:hover,
+.controls .btn-secondary:hover {
+  background: linear-gradient(135deg, var(--secondary-hover), #E67300);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 140, 0, 0.4);
+}
+
+/* フォーカススタイル */
+.daw-controls button:focus,
+.controls button:focus,
+.project-controls button:focus,
+.daw-controls .accessible-button:focus,
+.controls .accessible-button:focus,
+.project-controls .accessible-button:focus {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
 /* 音素材パネル切り替えボタン */
 .toggle-panel-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, var(--safe-blue), var(--safe-purple));
   color: white;
   border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: 12px 24px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+  min-width: 120px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .toggle-panel-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  background: linear-gradient(135deg, var(--primary-hover), #553C9A);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 102, 204, 0.4);
+}
+
+.toggle-panel-btn:focus {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 /* 警告ボタン（リセットボタン）のスタイル */
 .button-warning {
-  background: linear-gradient(135deg, #ff9800, #f57c00);
+  background: linear-gradient(135deg, var(--safe-orange), var(--secondary-hover));
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+  padding: 12px 24px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+  min-width: 120px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .button-warning:hover {
-  background: linear-gradient(135deg, #f57c00, #e65100);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.4);
+  background: linear-gradient(135deg, var(--secondary-hover), #E67300);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 140, 0, 0.4);
 }
 
 .button-warning:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+}
+
+.button-warning:focus {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 /* 自動保存情報セクションのスタイル */
@@ -1013,4 +1213,27 @@
 .auto-save-info li {
   margin-bottom: 5px;
   color: #388e3c;
+}
+
+/* 動きを抑制する設定 */
+@media (prefers-reduced-motion: reduce) {
+  .transport-btn,
+  .play-btn,
+  .stop-btn {
+    transition: none;
+  }
+  
+  .play-btn:hover,
+  .stop-btn:hover {
+    transform: none;
+  }
+  
+  .play-btn.playing {
+    animation: none;
+  }
+  
+  @keyframes pulse-play {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1); }
+  }
 }

@@ -79,7 +79,7 @@
 }
 
 .clear-filters-btn:hover {
-  background: #d32f2f;
+  background: var(--warning-hover);
   transform: translateY(-2px);
 }
 
@@ -91,7 +91,7 @@
 }
 
 .stats-card {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, var(--safe-blue), var(--safe-purple));
   color: white;
   padding: 20px;
   border-radius: 16px;

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SoundCollection.css';
+import { useAnnouncement, useErrorMessages } from '../hooks/useAccessibility';
 
 const SoundCollection = () => {
   const [recordings, setRecordings] = useState([]);
@@ -10,6 +11,11 @@ const SoundCollection = () => {
   const [audioContext, setAudioContext] = useState(null);
   const fileInputRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const recordButtonRef = useRef(null);
+
+  // アクセシビリティフック
+  const { announce, AnnouncementRegion } = useAnnouncement();
+  const { showError, clearError, ErrorRegion } = useErrorMessages();
 
   // コンポーネントアンマウント時のクリーンアップ
   useEffect(() => {
@@ -33,9 +39,14 @@ const SoundCollection = () => {
 
   const startRecording = async () => {
     try {
+      // エラーメッセージをクリア
+      clearError();
+      announce('録音を開始しています...', 'assertive');
+
       // iOSでのマイクアクセス改善 - まずテストを実行
       const hasAccess = await testMicrophoneAccess();
       if (!hasAccess) {
+        showError('マイクにアクセスできませんでした。ブラウザの設定を確認してください。');
         return;
       }
 
@@ -156,12 +167,15 @@ const SoundCollection = () => {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
+        
+        announce('録音が完了しました。音に名前をつけて保存してください。', 'assertive');
       };
 
       recorder.start();
       console.log('録音開始:', recorder.state);
       setMediaRecorder(recorder);
       setIsRecording(true);
+      announce('録音を開始しました。', 'assertive');
       console.log('録音開始完了');
       
     } catch (error) {
@@ -181,7 +195,8 @@ const SoundCollection = () => {
         errorMessage = error.message;
       }
       
-      alert(errorMessage);
+      showError(errorMessage);
+      announce(errorMessage, 'assertive');
     }
   };
 
@@ -191,6 +206,7 @@ const SoundCollection = () => {
       mediaRecorder.stream.getTracks().forEach(track => track.stop());
       setIsRecording(false);
       setMediaRecorder(null);
+      announce('録音を停止しました。', 'assertive');
     }
     
     // 音声レベル監視を停止
@@ -385,74 +401,126 @@ const SoundCollection = () => {
 
   return (
     <div className="sound-collection">
-      <h2>🎤 音あつめページ</h2>
-      <p>身の回りにある音を録音したり、音ファイルをアップロードして音素材を集めましょう！</p>
+      <header>
+        <h2 id="page-title">
+          <span role="img" aria-label="マイク">🎤</span> 音あつめページ
+        </h2>
+        <p className="page-description">
+          身の回りにある音を録音したり、音ファイルをアップロードして音素材を集めましょう！
+        </p>
+      </header>
       
-      <div className="collection-actions">
-        <div className="recording-section card">
-          <h3>🎙️ 音を録音する</h3>
+      {/* アクセシビリティ用のライブリージョン */}
+      <AnnouncementRegion />
+      <ErrorRegion />
+      
+      <section className="collection-actions" aria-labelledby="collection-title">
+        <h3 id="collection-title" className="sr-only">音の収集方法</h3>
+        
+        <section className="recording-section card" aria-labelledby="recording-title">
+          <h3 id="recording-title">
+            <span role="img" aria-label="マイク">🎙️</span> 音を録音する
+          </h3>
           
           {/* iOS用の説明 */}
-          <div className="ios-notice">
-            <p>📱 <strong>iPhone/iPadをお使いの方へ：</strong></p>
+          <div className="ios-notice" role="region" aria-labelledby="ios-instructions">
+            <h4 id="ios-instructions" className="sr-only">iPhone/iPad使用時の注意事項</h4>
+            <p>
+              <span role="img" aria-label="スマートフォン">📱</span> 
+              <strong>iPhone/iPadをお使いの方へ：</strong>
+            </p>
             <p>録音ボタンを押すとマイクの使用許可を求めるダイアログが表示されます。「許可」を選択してください。</p>
             <p>ダイアログが表示されない場合は、Safari設定 → プライバシーとセキュリティ → マイク でこのサイトを許可してください。</p>
           </div>
           
-          <div className="recording-controls">
+          <div className="recording-controls" role="group" aria-labelledby="recording-controls-label">
+            <h4 id="recording-controls-label" className="sr-only">録音操作</h4>
             {!isRecording ? (
               <button 
-                className="button-primary large-button record-btn"
+                ref={recordButtonRef}
+                className="accessible-button button-primary large-button record-btn"
                 onClick={startRecording}
+                aria-describedby="record-instructions"
+                type="button"
               >
-                🔴 録音開始
+                <span role="img" aria-label="録音開始">🔴</span> 録音開始
               </button>
             ) : (
               <button 
-                className="button-secondary large-button stop-btn"
+                className="accessible-button button-secondary large-button stop-btn"
                 onClick={stopRecording}
+                aria-describedby="stop-instructions"
+                type="button"
               >
-                ⏹️ 録音停止
+                <span role="img" aria-label="停止">⏹️</span> 録音停止
               </button>
             )}
+            <div id="record-instructions" className="sr-only">
+              録音開始ボタンを押すとマイクが有効になり、音声の録音が始まります
+            </div>
+            <div id="stop-instructions" className="sr-only">
+              録音停止ボタンを押すと録音が終了し、音に名前をつけることができます
+            </div>
           </div>
+
           {isRecording && (
-            <div className="recording-status">
+            <div 
+              className="recording-status" 
+              role="status" 
+              aria-live="polite"
+              aria-label="録音状況"
+            >
               <div className="recording-indicator">
-                <div className="pulse-dot"></div>
+                <div className="pulse-dot" aria-hidden="true"></div>
                 録音中...
               </div>
-              <div className="audio-level-meter">
-                <div className="audio-level-label">音声入力レベル:</div>
-                <div className="audio-level-bar">
+              <div className="audio-level-meter" role="group" aria-labelledby="audio-level-label">
+                <div id="audio-level-label" className="audio-level-label">音声入力レベル:</div>
+                <div 
+                  className="audio-level-bar" 
+                  role="progressbar"
+                  aria-valuenow={Math.round(audioLevel)}
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-label={`音声レベル ${Math.round(audioLevel)}%`}
+                >
                   <div 
                     className="audio-level-fill" 
                     style={{ width: `${audioLevel}%` }}
+                    aria-hidden="true"
                   ></div>
                 </div>
-                <div className="audio-level-value">{Math.round(audioLevel)}%</div>
+                <div className="audio-level-value" aria-hidden="true">{Math.round(audioLevel)}%</div>
               </div>
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="upload-section card">
-          <h3>📁 音ファイルをアップロード</h3>
+        <section className="upload-section card" aria-labelledby="upload-title">
+          <h3 id="upload-title">
+            <span role="img" aria-label="フォルダ">📁</span> 音ファイルをアップロード
+          </h3>
           <button 
-            className="button-secondary large-button"
+            className="accessible-button button-secondary large-button"
             onClick={() => fileInputRef.current?.click()}
+            aria-describedby="upload-instructions"
+            type="button"
           >
-            📂 ファイルを選択
+            <span role="img" aria-label="ファイル選択">📂</span> ファイルを選択
           </button>
+          <div id="upload-instructions" className="sr-only">
+            音声ファイルを選択してアップロードできます。対応形式: MP3, WAV, M4A など
+          </div>
           <input
             ref={fileInputRef}
             type="file"
             accept="audio/*"
             onChange={handleFileUpload}
             style={{ display: 'none' }}
+            aria-label="音声ファイルを選択"
           />
-        </div>
-      </div>
+        </section>
+      </section>
 
       {currentRecording && (
         <RecordingEditor 
@@ -462,18 +530,28 @@ const SoundCollection = () => {
         />
       )}
 
-      <div className="recent-recordings">
-        <h3>📝 最近録音した音</h3>
+      <section className="recent-recordings" aria-labelledby="recent-title">
+        <h3 id="recent-title">
+          <span role="img" aria-label="メモ">📝</span> 最近録音した音
+        </h3>
         {recordings.length === 0 ? (
           <p className="no-recordings">まだ録音した音がありません。上の録音ボタンから始めましょう！</p>
         ) : (
-          <div className="recordings-grid">
-            {recordings.map(recording => (
-              <SoundCard key={recording.id} recording={recording} />
+          <div 
+            className="recordings-grid" 
+            role="grid" 
+            aria-label="録音された音のリスト"
+          >
+            {recordings.map((recording, index) => (
+              <SoundCard 
+                key={recording.id} 
+                recording={recording} 
+                index={index}
+              />
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };
@@ -482,51 +560,99 @@ const RecordingEditor = ({ recording, onSave, onCancel }) => {
   const [name, setName] = useState(recording.name);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState(recording.tags);
+  const [validationMessage, setValidationMessage] = useState('');
 
   const addTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
       setTags([...tags, tagInput.trim()]);
       setTagInput('');
+      setValidationMessage(`タグ「${tagInput.trim()}」を追加しました`);
+    } else if (tags.includes(tagInput.trim())) {
+      setValidationMessage('このタグは既に追加されています');
     }
   };
 
   const removeTag = (tagToRemove) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
+    setValidationMessage(`タグ「${tagToRemove}」を削除しました`);
   };
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       addTag();
     }
   };
 
+  const handleSave = () => {
+    if (!name.trim()) {
+      setValidationMessage('音の名前を入力してください');
+      return;
+    }
+    onSave(name, tags);
+  };
+
   return (
-    <div className="recording-editor card">
-      <h3>✏️ 音に名前をつけよう</h3>
+    <section 
+      className="recording-editor card" 
+      role="dialog" 
+      aria-labelledby="editor-title"
+      aria-describedby="editor-description"
+    >
+      <h3 id="editor-title">
+        <span role="img" aria-label="編集">✏️</span> 音に名前をつけよう
+      </h3>
+      <p id="editor-description" className="sr-only">
+        録音した音に名前とタグをつけて保存できます
+      </p>
       
-      <audio 
-        controls 
-        src={recording.url} 
-        className="audio-preview"
-        onError={(e) => {
-          console.error('音声プレビューの読み込みエラー:', e);
-        }}
-      />
+      <div className="audio-preview-container">
+        <label htmlFor="audio-preview" className="audio-preview-label">録音した音のプレビュー:</label>
+        <audio 
+          id="audio-preview"
+          controls 
+          src={recording.url} 
+          className="accessible-audio audio-preview"
+          onError={(e) => {
+            console.error('音声プレビューの読み込みエラー:', e);
+          }}
+          aria-describedby="audio-preview-desc"
+        >
+          <track kind="captions" label="音声説明" srcLang="ja" />
+          お使いのブラウザは音声再生に対応していません。
+        </audio>
+        <p id="audio-preview-desc" className="sr-only">
+          録音された音声を再生して確認できます
+        </p>
+      </div>
       
       <div className="form-group">
-        <label htmlFor="soundName">音の名前:</label>
+        <label htmlFor="soundName" className="required-label">
+          音の名前 <span aria-label="必須" className="required">*</span>:
+        </label>
         <input
           id="soundName"
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (validationMessage) setValidationMessage('');
+          }}
           placeholder="例: ピアノの音、雨の音"
-          className="sound-name-input"
+          className="accessible-input sound-name-input"
+          required
+          aria-describedby="name-help"
+          aria-invalid={!name.trim() && validationMessage ? 'true' : 'false'}
         />
+        <p id="name-help" className="help-text">
+          この音を表す分かりやすい名前をつけてください
+        </p>
       </div>
 
       <div className="form-group">
-        <label htmlFor="soundTags">タグ:</label>
+        <label htmlFor="soundTags" className="optional-label">
+          タグ <span className="optional">(任意)</span>:
+        </label>
         <div className="tag-input-container">
           <input
             id="soundTags"
@@ -535,63 +661,157 @@ const RecordingEditor = ({ recording, onSave, onCancel }) => {
             onChange={(e) => setTagInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="例: 楽器、自然"
-            className="tag-input"
+            className="accessible-input tag-input"
+            aria-describedby="tag-help"
+            list="tag-suggestions"
           />
-          <button onClick={addTag} className="add-tag-btn">追加</button>
+          <datalist id="tag-suggestions">
+            <option value="楽器">楽器</option>
+            <option value="自然">自然</option>
+            <option value="機械">機械</option>
+            <option value="動物">動物</option>
+            <option value="声">声</option>
+          </datalist>
+          <button 
+            onClick={addTag} 
+            className="accessible-button add-tag-btn"
+            type="button"
+            disabled={!tagInput.trim()}
+            aria-describedby="add-tag-help"
+          >
+            追加
+          </button>
         </div>
+        <p id="tag-help" className="help-text">
+          音の種類やカテゴリを表すタグを追加できます。Enterキーでも追加できます。
+        </p>
+        <p id="add-tag-help" className="sr-only">
+          入力したタグを音に追加します
+        </p>
         
         {tags.length > 0 && (
-          <div className="tags-display">
-            {tags.map(tag => (
-              <span key={tag} className="tag">
+          <div className="tags-display" role="group" aria-labelledby="tags-label">
+            <p id="tags-label" className="tags-title">追加されたタグ:</p>
+            <ul className="tags-list" aria-live="polite">
+              {tags.map((tag, index) => (
+                <li key={tag} className="tag-item">
+                  <span className="tag">
+                    {tag}
+                    <button 
+                      onClick={() => removeTag(tag)} 
+                      className="remove-tag"
+                      type="button"
+                      aria-label={`タグ「${tag}」を削除`}
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {validationMessage && (
+        <div 
+          className="validation-message" 
+          role="status" 
+          aria-live="polite"
+        >
+          {validationMessage}
+        </div>
+      )}
+
+      <div className="editor-actions" role="group" aria-labelledby="actions-label">
+        <p id="actions-label" className="sr-only">保存・キャンセル操作</p>
+        <button 
+          onClick={handleSave}
+          className="accessible-button button-primary"
+          disabled={!name.trim()}
+          type="button"
+          aria-describedby="save-help"
+        >
+          <span role="img" aria-label="保存">💾</span> 保存
+        </button>
+        <button 
+          onClick={onCancel} 
+          className="accessible-button button-secondary"
+          type="button"
+          aria-describedby="cancel-help"
+        >
+          <span role="img" aria-label="キャンセル">❌</span> キャンセル
+        </button>
+        <p id="save-help" className="sr-only">
+          音の名前とタグを保存します
+        </p>
+        <p id="cancel-help" className="sr-only">
+          編集をキャンセルして録音を破棄します
+        </p>
+      </div>
+    </section>
+  );
+};
+
+
+const SoundCard = ({ recording, index }) => {
+  const formattedDate = new Date(recording.createdAt).toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  return (
+    <article 
+      className="sound-card" 
+      aria-labelledby={`sound-title-${recording.id}`}
+      aria-describedby={`sound-desc-${recording.id}`}
+    >
+      <header className="sound-info">
+        <h4 id={`sound-title-${recording.id}`} className="sound-name">
+          {recording.name}
+        </h4>
+        <p className="sound-date" aria-label={`録音日: ${formattedDate}`}>
+          {formattedDate}
+        </p>
+        {recording.tags.length > 0 && (
+          <div className="sound-tags" role="group" aria-label="タグ">
+            {recording.tags.map((tag, tagIndex) => (
+              <span 
+                key={tag} 
+                className="tag small"
+                role="mark"
+                aria-label={`タグ: ${tag}`}
+              >
                 {tag}
-                <button onClick={() => removeTag(tag)} className="remove-tag">×</button>
               </span>
             ))}
           </div>
         )}
-      </div>
-
-      <div className="editor-actions">
-        <button 
-          onClick={() => onSave(name, tags)}
-          className="button-primary"
-          disabled={!name.trim()}
+      </header>
+      
+      <div className="sound-player">
+        <label htmlFor={`audio-${recording.id}`} className="sr-only">
+          {recording.name}の音声プレーヤー
+        </label>
+        <audio 
+          id={`audio-${recording.id}`}
+          controls 
+          src={recording.url}
+          className="accessible-audio"
+          onError={(e) => {
+            console.error('音声カードの読み込みエラー:', e, 'recording:', recording.name);
+          }}
+          aria-describedby={`audio-desc-${recording.id}`}
         >
-          💾 保存
-        </button>
-        <button onClick={onCancel} className="button-secondary">
-          ❌ キャンセル
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const SoundCard = ({ recording }) => {
-  return (
-    <div className="sound-card">
-      <div className="sound-info">
-        <h4>{recording.name}</h4>
-        <p className="sound-date">
-          {new Date(recording.createdAt).toLocaleDateString('ja-JP')}
+          <track kind="captions" label="音声説明" srcLang="ja" />
+          お使いのブラウザは音声再生に対応していません。
+        </audio>
+        <p id={`audio-desc-${recording.id}`} className="sr-only">
+          {recording.name}の音声ファイル。再生ボタンで音を聞くことができます。
         </p>
-        {recording.tags.length > 0 && (
-          <div className="sound-tags">
-            {recording.tags.map(tag => (
-              <span key={tag} className="tag small">{tag}</span>
-            ))}
-          </div>
-        )}
       </div>
-      <audio 
-        controls 
-        src={recording.url}
-        onError={(e) => {
-          console.error('音声カードの読み込みエラー:', e, 'recording:', recording.name);
-        }}
-      />
-    </div>
+    </article>
   );
 };
 

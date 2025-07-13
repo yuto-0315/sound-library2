@@ -198,11 +198,19 @@ const LibrarySoundCard = ({ sound, onDelete }) => {
     e.dataTransfer.effectAllowed = 'copy';
   };
 
+  const dragEnd = (e) => {
+    // DAWPageのクリーンアップ関数を呼び出す
+    if (window.cleanupDragStateCallback) {
+      window.cleanupDragStateCallback();
+    }
+  };
+
   return (
     <div 
       className="library-sound-card"
       draggable
       onDragStart={dragStart}
+      onDragEnd={dragEnd}
     >
       <div className="sound-header">
         <h4>{sound.name}</h4>
@@ -237,7 +245,10 @@ const LibrarySoundCard = ({ sound, onDelete }) => {
         onError={(e) => {
           console.error('音声の読み込みエラー:', e, 'sound:', sound.name);
         }}
-      />
+      >
+        <track kind="captions" label="音声説明" srcLang="ja" />
+        お使いのブラウザは音声再生に対応していません。
+      </audio>
       
       <div className="drag-hint">
         🎵 DAWページにドラッグ&ドロップできます

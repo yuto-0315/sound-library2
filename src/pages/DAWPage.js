@@ -81,6 +81,7 @@ const DAWPage = () => {
   const [draggedClip, setDraggedClip] = useState(null);
   const [dragPreview, setDragPreview] = useState(null);
   const [draggedSoundDuration, setDraggedSoundDuration] = useState(400); // ドラッグ中の音素材の長さ
+  const [dragOffset, setDragOffset] = useState(0); // ドラッグ開始時のクリップ内オフセット
   const [isExporting, setIsExporting] = useState(false); // 音源出力中フラグ
   const timelineRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -684,12 +685,18 @@ const DAWPage = () => {
     console.log('ドロップ処理開始:', { trackId, timePosition, draggedClip });
     
     try {
-      // 8分音符に合わせて位置を調整（50px単位）
-      const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
       
       // 既存のクリップの移動かどうかチェック
       if (draggedClip) {
         console.log('既存クリップの移動:', draggedClip.id, '元トラック:', draggedClip.originalTrackId, '新トラック:', trackId);
+        console.log('ドラッグオフセット:', dragOffset, 'マウス位置:', timePosition);
+        
+        // ドラッグオフセットを考慮した新しい開始位置を計算
+        const adjustedPosition = timePosition - dragOffset;
+        // 8分音符に合わせて位置を調整（50px単位）
+        const snappedPosition = Math.max(0, Math.round(adjustedPosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH);
+        
+        console.log('調整後の位置:', adjustedPosition, 'スナップ後:', snappedPosition);
         
         // 既存クリップの移動
         const updatedClip = {
@@ -726,6 +733,7 @@ const DAWPage = () => {
           return track;
         }));
         setDraggedClip(null);
+        setDragOffset(0);
         return;
       }
       
@@ -785,6 +793,9 @@ const DAWPage = () => {
         console.warn('無効なduration:', duration, 'デフォルト値を使用');
         duration = 400; // 1小節分
       }
+
+      // 新しい音素材の場合は通常のスナップ処理
+      const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
 
       const newClip = {
         id: Date.now() + Math.random(), // より確実にユニークなIDを生成
@@ -846,12 +857,31 @@ const DAWPage = () => {
     if (!trackElement || !timelineRef.current) {
       return;
     }
+
+    // 初回ドラッグプレビュー表示時に強制クリーンアップタイマーを設定
+    if (!window.dragCleanupTimer) {
+      console.log('強制クリーンアップタイマー設定（10秒後）');
+      window.dragCleanupTimer = setTimeout(() => {
+        console.log('強制クリーンアップタイマー実行');
+        cleanupDragState();
+      }, 10000); // 10秒後に強制クリーンアップ
+    }
     
     try {
       // ドラッグプレビューの更新
       const rect = trackElement.getBoundingClientRect();
       const timePosition = clientX - rect.left;
-      const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
+      
+      let snappedPosition;
+      
+      if (draggedClip) {
+        // 既存クリップの場合：ドラッグオフセットを考慮
+        const adjustedPosition = timePosition - dragOffset;
+        snappedPosition = Math.max(0, Math.round(adjustedPosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH);
+      } else {
+        // 新しい音素材の場合：通常の処理
+        snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
+      }
       
       const trackRect = trackElement.getBoundingClientRect();
       const tracksAreaRect = timelineRef.current.getBoundingClientRect();
@@ -901,23 +931,40 @@ const DAWPage = () => {
   };
 
   // クリップのドラッグ開始
-  const handleClipDragStart = (clip, originalTrackId) => {
+  const handleClipDragStart = (clip, originalTrackId, mouseX, clipElement) => {
     console.log('クリップドラッグ開始:', clip.id, 'トラック:', originalTrackId);
+    
+    // クリップ内でのマウス位置のオフセットを計算
+    const clipRect = clipElement.getBoundingClientRect();
+    const offsetInClip = mouseX - clipRect.left;
+    
+    console.log('ドラッグオフセット:', offsetInClip, 'クリップ開始位置:', clip.startTime);
+    
     setDraggedClip({ ...clip, originalTrackId });
+    setDragOffset(offsetInClip);
   };
 
   // ドラッグ状態の完全なクリーンアップ
   const cleanupDragState = useCallback(() => {
+    console.log('ドラッグ状態クリーンアップ実行');
+    
     // ドラッグオーバーのタイムアウトをクリア
     if (dragOverTimeoutRef.current) {
       clearTimeout(dragOverTimeoutRef.current);
       dragOverTimeoutRef.current = null;
     }
     
+    // 強制クリーンアップタイマーをクリア
+    if (window.dragCleanupTimer) {
+      clearTimeout(window.dragCleanupTimer);
+      window.dragCleanupTimer = null;
+    }
+    
     // すべてのドラッグ関連の状態をリセット
     setDraggedClip(null);
     setDragPreview(null);
     setDraggedSoundDuration(400);
+    setDragOffset(0);
     
     // DOM要素のクリーンアップ
     document.querySelectorAll('.track').forEach(track => {
@@ -941,6 +988,38 @@ const DAWPage = () => {
     // ボディクラスのクリーンアップ
     document.body.classList.remove('dragging');
   }, []);
+
+  // コンポーネントマウント時にグローバルコールバックを設定
+  useEffect(() => {
+    window.cleanupDragStateCallback = cleanupDragState;
+    
+    // グローバルなドラッグ終了イベントリスナーを追加
+    const handleGlobalDragEnd = () => {
+      console.log('グローバルドラッグ終了イベント検出');
+      cleanupDragState();
+    };
+
+    const handleGlobalDragLeave = (e) => {
+      // ドキュメント外にドラッグが出た場合
+      if (!e.relatedTarget || e.relatedTarget.nodeName === 'HTML') {
+        console.log('ドキュメント外にドラッグアウト');
+        cleanupDragState();
+      }
+    };
+
+    // ドキュメントレベルでイベントリスナーを設定
+    document.addEventListener('dragend', handleGlobalDragEnd);
+    document.addEventListener('dragleave', handleGlobalDragLeave);
+    
+    // クリーンアップ関数
+    return () => {
+      if (window.cleanupDragStateCallback === cleanupDragState) {
+        window.cleanupDragStateCallback = null;
+      }
+      document.removeEventListener('dragend', handleGlobalDragEnd);
+      document.removeEventListener('dragleave', handleGlobalDragLeave);
+    };
+  }, [cleanupDragState]);
 
   // ドラッグ終了時のクリーンアップ
   const handleDragEnd = (e) => {
@@ -1451,6 +1530,7 @@ const DAWPage = () => {
                   onDragEnd={handleDragEnd}
                   trackHeight={trackHeight}
                   bpm={bpm}
+                  updateDragPreview={updateDragPreview}
                 />
               ))}
             </div>
@@ -1808,7 +1888,7 @@ const Timeline = ({ bpm }) => {
   );
 };
 
-const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, bpm }) => {
+const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, bpm, updateDragPreview }) => {
   const handleDrop = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const timePosition = e.clientX - rect.left;
@@ -1855,17 +1935,27 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
     onDrop(mockDropEvent, newTrackId, timePosition);
   }, [onDrop]);
 
+  const handleUpdateDragPreview = useCallback((e) => {
+    const { clientX, trackElement } = e.detail;
+    // 親コンポーネントのupdateDragPreview関数を呼び出し
+    if (typeof updateDragPreview === 'function') {
+      updateDragPreview(clientX, trackElement);
+    }
+  }, [updateDragPreview]);
+
   React.useEffect(() => {
     const trackElement = document.querySelector(`[data-track-id="${track.id}"]`);
     if (trackElement) {
       trackElement.addEventListener('mobileDrop', handleMobileDrop);
       trackElement.addEventListener('mobileClipMove', handleMobileClipMove);
+      trackElement.addEventListener('updateDragPreview', handleUpdateDragPreview);
       return () => {
         trackElement.removeEventListener('mobileDrop', handleMobileDrop);
         trackElement.removeEventListener('mobileClipMove', handleMobileClipMove);
+        trackElement.removeEventListener('updateDragPreview', handleUpdateDragPreview);
       };
     }
-  }, [track.id, handleMobileDrop, handleMobileClipMove]);
+  }, [track.id, handleMobileDrop, handleMobileClipMove, handleUpdateDragPreview]);
 
   return (
     <div 
@@ -1941,8 +2031,15 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
     e.dataTransfer.setData('text/plain', `existing-clip-${clip.id}`);
     e.dataTransfer.effectAllowed = 'move';
     
-    // onDragStartコールバックを呼び出し
-    onDragStart(clip, trackId);
+    // onDragStartコールバックを呼び出し（マウス位置とクリップ要素を渡す）
+    onDragStart(clip, trackId, e.clientX, e.currentTarget);
+  };
+
+  const handleDragEnd = (e) => {
+    // ドラッグ終了時にクリーンアップを呼び出し
+    if (onDragEnd) {
+      onDragEnd(e);
+    }
   };
 
   // タッチイベント対応（クリップの移動）
@@ -1970,7 +2067,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
       setIsDragging(true);
       // スクロールを一時的に無効化（移動が確定してから）
       document.body.classList.add('dragging');
-      onDragStart(clip, trackId);
+      onDragStart(clip, trackId, touchStart.x, e.currentTarget);
     }
     
     if (isDragging) {
@@ -1988,6 +2085,18 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
       // 新しいハイライトを追加（自分のトラック以外も含む）
       if (trackElement) {
         trackElement.classList.add('drag-over');
+        
+        // ドラッグプレビューも更新（onDragStart時と同様のロジック）
+        if (onDragStart) {
+          // 親コンポーネントのupdateDragPreview関数を呼び出すためのカスタムイベント
+          const dragPreviewEvent = new CustomEvent('updateDragPreview', {
+            detail: {
+              clientX: currentPos.x,
+              trackElement: trackElement
+            }
+          });
+          trackElement.dispatchEvent(dragPreviewEvent);
+        }
       }
     }
   };
@@ -2038,7 +2147,7 @@ const AudioClip = ({ clip, trackId, onRemove, onDragStart, onDragEnd }) => {
       className={`audio-clip ${isDragging ? 'dragging' : ''}`}
       draggable="true"
       onDragStart={handleDragStart}
-      onDragEnd={onDragEnd}
+      onDragEnd={handleDragEnd}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

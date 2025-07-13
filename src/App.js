@@ -10,8 +10,16 @@ function App() {
   return (
     <Router>
       <div className="App">
-        <Navigation />
-        <main className="main-content">
+        <header role="banner">
+          <Navigation />
+        </header>
+        
+        <main 
+          id="main-content" 
+          className="main-content" 
+          role="main"
+          tabIndex="-1"
+        >
           <Routes>
             <Route path="/" element={<SoundCollection />} />
             <Route path="/collection" element={<SoundCollection />} />
