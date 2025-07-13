@@ -1520,18 +1520,16 @@ const DAWPage = () => {
                   }}
                 />
               )}
-              {tracks.map((track, index) => (
+              {tracks.map((track) => (
                 <Track
                   key={track.id}
                   track={track}
-                  trackIndex={index}
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onRemoveClip={removeClip}
                   onClipDragStart={handleClipDragStart}
                   onDragEnd={handleDragEnd}
                   trackHeight={trackHeight}
-                  bpm={bpm}
                   updateDragPreview={updateDragPreview}
                 />
               ))}
@@ -1894,7 +1892,7 @@ const Timeline = ({ bpm }) => {
   );
 };
 
-const Track = ({ track, trackIndex, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, bpm, updateDragPreview }) => {
+const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, updateDragPreview }) => {
   const handleDrop = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const timePosition = e.clientX - rect.left;
