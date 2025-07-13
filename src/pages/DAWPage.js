@@ -1495,10 +1495,11 @@ const DAWPage = () => {
             <div className="timeline-header-spacer">
               タイムライン
             </div>
-            {tracks.map(track => (
+            {tracks.map((track, index) => (
               <TrackHeader 
                 key={track.id} 
                 track={track} 
+                trackIndex={index}
                 onRemove={removeTrack}
                 trackHeight={trackHeight}
               />
@@ -1519,10 +1520,11 @@ const DAWPage = () => {
                   }}
                 />
               )}
-              {tracks.map(track => (
+              {tracks.map((track, index) => (
                 <Track
                   key={track.id}
                   track={track}
+                  trackIndex={index}
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onRemoveClip={removeClip}
@@ -1838,16 +1840,20 @@ const SoundItem = ({ sound, onDragStart }) => {
   );
 };
 
-const TrackHeader = ({ track, onRemove, trackHeight }) => {
+const TrackHeader = ({ track, onRemove, trackHeight, trackIndex }) => {
+  // トラック名を表示番号と元の名前で構成
+  const displayName = `トラック ${trackIndex + 1}`;
+  
   return (
     <div className="track-header" style={{ height: trackHeight }}>
       <div className="track-info">
-        <h4>{track.name}</h4>
+        <h4>{displayName}</h4>
         <div className="track-actions">
           <button 
             className="remove-track-btn"
             onClick={() => onRemove(track.id)}
-            title="トラックを削除"
+            title={`${displayName}を削除`}
+            aria-label={`${displayName}を削除`}
           >
             🗑️
           </button>
@@ -1888,7 +1894,7 @@ const Timeline = ({ bpm }) => {
   );
 };
 
-const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, bpm, updateDragPreview }) => {
+const Track = ({ track, trackIndex, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, bpm, updateDragPreview }) => {
   const handleDrop = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const timePosition = e.clientX - rect.left;
