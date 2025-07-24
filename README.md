@@ -122,13 +122,78 @@ npm run lint
 - 200%ズーム時の表示確認
 - カラーコントラストの確認
 
+## テスト
+
+このプロジェクトには包括的なJestユニットテストスイートが含まれています。
+
+### テストの実行
+
+```bash
+# 全テストの実行
+npm test
+
+# カバレッジレポート付きテスト
+npm run test:coverage
+
+# CI環境での実行
+npm run test:ci
+
+# 基本テストのみ実行
+npm test -- --testPathPattern="basic.test.js" --watchAll=false
+```
+
+### カテゴリ別テスト実行
+
+```bash
+# ユニットテストのみ
+npm run test:unit
+
+# アクセシビリティテストのみ
+npm run test:accessibility
+
+# コンポーネントテストのみ
+npm run test:components
+
+# カスタムフックテストのみ
+npm run test:hooks
+```
+
+### テスト構成
+
+- **コンポーネントテスト**: App, Navigation, SoundCollection, SoundLibrary, DAWPage
+- **カスタムフックテスト**: useAccessibility関連フック
+- **アクセシビリティテスト**: WAI-ARIA準拠、キーボードナビゲーション
+- **統合テスト**: ルーティング、LocalStorage連携
+
+### テストカバレッジ
+
+目標カバレッジ: 70%以上（ブランチ、関数、行、ステートメント）
+
+詳細なテスト情報は [TEST_DOCUMENTATION.md](./TEST_DOCUMENTATION.md) を参照してください。
+
+## 開発
+
+### コード品質
+
+```bash
+# ESLintでのコード検査
+npm run lint
+
+# ESLintでの自動修正
+npm run lint:fix
+```
+
+### アクセシビリティ
+
+- WAI-ARIA準拠
+- キーボードナビゲーション対応
+- スクリーンリーダー対応
+- 色コントラスト配慮
+- フォーカス管理
+
 ## ライセンス
 
-このプロジェクトは教育目的で開発されています。
-
-## 開発者
-
-
+このプロジェクトはMITライセンスの下で公開されています。
 
 ---
 
@@ -136,3 +201,9 @@ npm run lint
 - このアプリケーションはマイクへのアクセス許可が必要です。初回使用時にブラウザの許可を与えてください。
 - アクセシビリティ機能を最大限活用するため、最新のブラウザおよび支援技術をご利用ください。
 - 教育現場での使用時は、多様な学習ニーズに対応できるよう事前に機能を確認してください。
+
+
+
+# 機能追加
+拍と秒数を切り替えることができるようにする？
+クラウド機能の追加実装。
