@@ -86,43 +86,50 @@
   background: linear-gradient(135deg, #B91C1C, #991B1B);
 }
 
-.accessible-button.stop-btn,
-.accessible-button.button-secondary.stop-btn {
+/* SoundCollectionページ専用の録音停止ボタンスタイル */
+.sound-collection .accessible-button.stop-btn,
+.sound-collection .accessible-button.button-secondary.stop-btn {
   background: linear-gradient(135deg, var(--safe-orange), var(--secondary-hover)) !important;
   color: white !important;
-  font-size: 16px;
-  min-width: 180px;
-  min-height: 48px;
-  border: 2px solid transparent;
-  border-radius: 8px;
+  font-size: 16px !important;
+  min-width: 180px !important;
+  min-height: 48px !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: 2px solid transparent !important;
+  border-radius: 8px !important;
   font-weight: 600;
-  padding: 12px 24px;
+  padding: 12px 24px !important;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   gap: 8px;
   text-decoration: none;
+  flex-shrink: 1 !important;
+  flex-grow: 0 !important;
 }
 
-.accessible-button.stop-btn:hover,
-.accessible-button.button-secondary.stop-btn:hover {
+.sound-collection .accessible-button.stop-btn:hover,
+.sound-collection .accessible-button.button-secondary.stop-btn:hover {
   background: linear-gradient(135deg, var(--secondary-hover), #E67300) !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
 }
 
-.accessible-button.stop-btn:focus,
-.accessible-button.button-secondary.stop-btn:focus {
+.sound-collection .accessible-button.stop-btn:focus,
+.sound-collection .accessible-button.button-secondary.stop-btn:focus {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
   border-color: #fff;
   background: linear-gradient(135deg, var(--secondary-hover), #E67300) !important;
 }
 
-.accessible-button.stop-btn:active,
-.accessible-button.button-secondary.stop-btn:active {
+.sound-collection .accessible-button.stop-btn:active,
+.sound-collection .accessible-button.button-secondary.stop-btn:active {
   transform: translateY(0);
   background: linear-gradient(135deg, #E67300, #D85F00) !important;
 }
@@ -519,12 +526,15 @@
     font-size: 14px;
   }
   
-  .accessible-button.record-btn, 
-  .accessible-button.stop-btn {
-    font-size: 16px;
-    min-width: 160px;
-    min-height: 48px;
-    padding: 12px 20px;
+  .sound-collection .accessible-button.record-btn, 
+  .sound-collection .accessible-button.stop-btn {
+    font-size: 16px !important;
+    min-width: 160px !important;
+    min-height: 48px !important;
+    padding: 12px 20px !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 8px !important;
   }
   
   .tag-input-container {
@@ -566,11 +576,14 @@
     padding: 10px 16px;
   }
   
-  .accessible-button.record-btn, 
-  .accessible-button.stop-btn {
-    min-width: 140px;
-    font-size: 15px;
-    padding: 10px 16px;
+  .sound-collection .accessible-button.record-btn, 
+  .sound-collection .accessible-button.stop-btn {
+    min-width: 140px !important;
+    font-size: 15px !important;
+    padding: 10px 16px !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 8px !important;
   }
 }
 

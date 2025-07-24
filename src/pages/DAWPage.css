@@ -75,8 +75,8 @@
   aspect-ratio: 1 / 1;
 }
 
-.play-btn,
-.stop-btn {
+.daw-page .play-btn,
+.daw-page .stop-btn {
   /* 寸法の強制 */
   width: 60px !important;
   height: 60px !important;
@@ -106,7 +106,7 @@
   transition: all 0.3s ease;
 }
 
-.play-btn {
+.daw-page .play-btn {
   background: linear-gradient(135deg, var(--success-color), #047857);
   color: white;
   box-shadow: 0 4px 16px rgba(5, 150, 105, 0.3);
@@ -128,17 +128,17 @@
   transition: all 0.3s ease;
 }
 
-.play-btn:hover {
+.daw-page .play-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
 }
 
-.play-btn:focus {
+.daw-page .play-btn:focus {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
 
-.play-btn.playing {
+.daw-page .play-btn.playing {
   background: linear-gradient(135deg, var(--safe-orange), var(--secondary-hover));
   animation: pulse-play 1.5s infinite;
 }
@@ -148,7 +148,7 @@
   50% { transform: scale(1.05); }
 }
 
-.stop-btn {
+.daw-page .stop-btn {
   background: linear-gradient(135deg, var(--warning-color), var(--warning-hover));
   color: white;
   box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
@@ -170,12 +170,12 @@
   transition: all 0.3s ease;
 }
 
-.stop-btn:hover {
+.daw-page .stop-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
 }
 
-.stop-btn:focus {
+.daw-page .stop-btn:focus {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
@@ -879,8 +879,8 @@
   
   /* トランスポートボタンのサイズを維持 */
   .transport-btn,
-  .play-btn,
-  .stop-btn {
+  .daw-page .play-btn,
+  .daw-page .stop-btn {
     width: 60px !important;
     height: 60px !important;
     min-width: 60px;
@@ -971,8 +971,8 @@
     max-width: 50px;
   }
   
-  .play-btn,
-  .stop-btn {
+  .daw-page .play-btn,
+  .daw-page .stop-btn {
     width: 50px !important;
     height: 50px !important;
     min-width: 50px;
@@ -1218,17 +1218,17 @@
 /* 動きを抑制する設定 */
 @media (prefers-reduced-motion: reduce) {
   .transport-btn,
-  .play-btn,
-  .stop-btn {
+  .daw-page .play-btn,
+  .daw-page .stop-btn {
     transition: none;
   }
   
-  .play-btn:hover,
-  .stop-btn:hover {
+  .daw-page .play-btn:hover,
+  .daw-page .stop-btn:hover {
     transform: none;
   }
   
-  .play-btn.playing {
+  .daw-page .play-btn.playing {
     animation: none;
   }
   
