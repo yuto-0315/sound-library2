@@ -47,7 +47,6 @@ const SoundCollection = () => {
         return;
       }
 
-      console.log('録音開始処理中...');
       
       // iPad用の音声設定を最適化
       const audioConstraints = {
@@ -58,66 +57,35 @@ const SoundCollection = () => {
         channelCount: 1          // モノラル録音を明示
       };
       
-      console.log('音声制約:', audioConstraints);
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: audioConstraints
       });
       
-      console.log('録音ストリーム取得成功');
-      console.log('ストリーム詳細:', {
-        id: stream.id,
-        active: stream.active,
-        tracks: stream.getTracks().map(track => ({
-          id: track.id,
-          kind: track.kind,
-          label: track.label,
-          enabled: track.enabled,
-          muted: track.muted,
-          readyState: track.readyState,
-          settings: track.getSettings ? track.getSettings() : 'getSettings not supported'
-        }))
-      });
       
       // MediaRecorderのオプションを決定
       let recorderOptions = {};
       
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         recorderOptions.mimeType = 'audio/webm;codecs=opus';
-        console.log('使用するMIMEタイプ: audio/webm;codecs=opus');
       } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
         recorderOptions.mimeType = 'audio/mp4';
-        console.log('使用するMIMEタイプ: audio/mp4');
       } else if (MediaRecorder.isTypeSupported('audio/wav')) {
         recorderOptions.mimeType = 'audio/wav';
-        console.log('使用するMIMEタイプ: audio/wav');
       } else {
-        console.log('デフォルトMIMEタイプを使用');
       }
       
       const recorder = new MediaRecorder(stream, recorderOptions);
-      console.log('MediaRecorder作成:', {
-        mimeType: recorder.mimeType,
-        state: recorder.state,
-        supportedTypes: {
-          'audio/webm;codecs=opus': MediaRecorder.isTypeSupported('audio/webm;codecs=opus'),
-          'audio/mp4': MediaRecorder.isTypeSupported('audio/mp4'),
-          'audio/wav': MediaRecorder.isTypeSupported('audio/wav')
-        }
-      });
       
       const chunks = [];
 
       recorder.ondataavailable = (e) => {
-        console.log('録音データ受信:', e.data.size, 'bytes, type:', e.data.type);
         chunks.push(e.data);
       };
 
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/wav' });
         const url = URL.createObjectURL(blob);
-        console.log('録音完了 - Blobサイズ:', blob.size, 'bytes, type:', blob.type);
-        console.log('チャンク数:', chunks.length, 'chunks');
         setCurrentRecording({
           id: Date.now(),
           url: url,
@@ -131,11 +99,9 @@ const SoundCollection = () => {
       };
 
       recorder.start();
-      console.log('録音開始:', recorder.state);
       setMediaRecorder(recorder);
       setIsRecording(true);
       announce('録音を開始しました。', 'assertive');
-      console.log('録音開始完了');
       
     } catch (error) {
       console.error('録音の開始に失敗しました:', error);
@@ -160,7 +126,6 @@ const SoundCollection = () => {
   };
 
   const stopRecording = () => {
-    console.log('録音停止開始');
     setIsRecording(false); // まず録音状態を停止に設定
     
     if (mediaRecorder) {
@@ -170,7 +135,6 @@ const SoundCollection = () => {
       announce('録音を停止しました。', 'assertive');
     }
     
-    console.log('録音停止完了');
   };
 
   // Blobを Base64 に変換する関数
@@ -231,7 +195,6 @@ const SoundCollection = () => {
   // マイクアクセステスト機能（iOSでの問題対策）
   const testMicrophoneAccess = async () => {
     try {
-      console.log('マイクアクセステスト開始');
       
       // HTTPS接続チェック
       if (!checkHTTPS()) {
@@ -247,14 +210,12 @@ const SoundCollection = () => {
       if (navigator.permissions) {
         try {
           const permission = await navigator.permissions.query({ name: 'microphone' });
-          console.log('マイク権限状態:', permission.state);
           
           if (permission.state === 'denied') {
             alert('マイクアクセスが拒否されています。ブラウザの設定からマイクの使用を許可してください。');
             return false;
           }
         } catch (permError) {
-          console.log('権限確認はサポートされていません:', permError);
         }
       }
 
@@ -269,7 +230,6 @@ const SoundCollection = () => {
       
       // すぐにストリームを停止
       stream.getTracks().forEach(track => track.stop());
-      console.log('マイクアクセステスト成功');
       return true;
       
     } catch (error) {

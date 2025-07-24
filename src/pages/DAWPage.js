@@ -21,7 +21,6 @@ const DAWPage = () => {
       const autoSavedData = localStorage.getItem('dawProjectAutoSave');
       if (autoSavedData) {
         const projectData = JSON.parse(autoSavedData);
-        console.log('自動保存データを復元中...', projectData);
         
         // トラックカウンターの復元
         if (projectData.trackNameCounter) {
@@ -94,14 +93,11 @@ const DAWPage = () => {
     
     // LocalStorageから音素材を読み込み
     const savedSounds = JSON.parse(localStorage.getItem('soundRecordings') || '[]');
-    console.log('LocalStorageから読み込んだ音素材数:', savedSounds.length);
     
     // audioDataからBlobを復元
     const soundsWithBlob = savedSounds.map(sound => {
       if (sound.audioData) {
         try {
-          console.log('音声データ復元中:', sound.name, 'データサイズ:', sound.audioData.length);
-          
           // Base64データの検証
           if (!sound.audioData.includes(',')) {
             console.error('無効なBase64フォーマット:', sound.name);
@@ -128,7 +124,6 @@ const DAWPage = () => {
           }
           
           const blob = new Blob([byteArray], { type: 'audio/wav' });
-          console.log('Blob復元成功:', sound.name, 'サイズ:', blob.size, 'タイプ:', blob.type);
           
           // Blobの有効性を確認
           if (blob.size === 0) {
@@ -162,12 +157,10 @@ const DAWPage = () => {
       return true;
     });
     
-    console.log('有効な音素材数:', validSounds.length, '/ 総数:', soundsWithBlob.length);
     setSounds(validSounds);
     
     // 無効な音素材があった場合はLocalStorageを更新
     if (validSounds.length !== soundsWithBlob.length) {
-      console.log('無効な音素材を除去してLocalStorageを更新');
       const validSoundsForStorage = validSounds.map(sound => ({
         ...sound,
         audioBlob: undefined // Blobは保存しない
@@ -218,41 +211,29 @@ const DAWPage = () => {
   const getAudioDuration = useCallback((audioBlob, currentBpm = bpm) => {
     return new Promise(async (resolve) => {
       if (!audioBlob || !(audioBlob instanceof Blob)) {
-        console.log('無効なaudioBlob - デフォルト値を使用');
         resolve(400);
         return;
       }
 
-      console.log('audioBlob詳細:', {
-        size: audioBlob.size,
-        type: audioBlob.type,
-        bpm: currentBpm
-      });
 
       // AudioContextを使用した方法を優先
       if (audioContext) {
         try {
-          console.log('AudioContext方式で音声長さを取得中...');
           const arrayBuffer = await audioBlob.arrayBuffer();
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
           const durationInSeconds = audioBuffer.duration;
           
-          console.log('AudioContext方式で取得した長さ:', durationInSeconds, '秒');
           
           if (isFinite(durationInSeconds) && durationInSeconds > 0) {
             const pixelsPerSecond = (currentBpm / 60) * 100;
             const widthInPixels = durationInSeconds * pixelsPerSecond;
-            console.log('AudioContext計算結果 - BPM:', currentBpm, '拍/秒:', currentBpm/60, 'ピクセル/秒:', pixelsPerSecond, '最終幅:', widthInPixels, 'px');
             resolve(widthInPixels);
             return;
           }
         } catch (error) {
-          console.log('AudioContext方式でエラー:', error);
+          console.error('AudioContext方式でエラー:', error);
         }
       }
-
-      // AudioContextが失敗した場合はデフォルト値を使用
-      console.log('AudioContextが利用できないため、デフォルト値を使用');
       resolve(400);
     });
   }, [audioContext, bpm]);
@@ -373,7 +354,6 @@ const DAWPage = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       
-      console.log('プロジェクトを保存しました');
     } catch (error) {
       console.error('プロジェクト保存エラー:', error);
       setError('プロジェクトの保存に失敗しました。');
@@ -437,7 +417,6 @@ const DAWPage = () => {
               })
           }));
           setTracks(restoredTracks);
-          console.log('トラックデータを復元しました:', restoredTracks.length, 'トラック');
         }
         
         // カウンターを復元
@@ -475,12 +454,10 @@ const DAWPage = () => {
               };
             });
             
-            console.log('音素材を追加しました:', newSounds.length, '個（既存:', prevSounds.length, '個）');
             return [...prevSounds, ...newSounds];
           });
         }
         
-        console.log('プロジェクトを読み込みました');
         setError(null);
         
         // 読み込み後に自動保存データも更新
@@ -494,7 +471,6 @@ const DAWPage = () => {
             trackIdCounter: projectData.trackIdCounter || 1
           };
           localStorage.setItem('dawProjectAutoSave', JSON.stringify(autoSaveData));
-          console.log('読み込み後の自動保存データを更新しました');
         }, 100);
       } catch (error) {
         console.error('プロジェクト読み込みエラー:', error);
@@ -589,7 +565,6 @@ const DAWPage = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       
-      console.log('音源を出力しました');
       if (exportContext && exportContext.state !== 'closed') {
         await exportContext.close().catch(error => {
           console.warn('Export AudioContext のクローズに失敗:', error);
@@ -682,21 +657,16 @@ const DAWPage = () => {
     e.preventDefault();
     setDragPreview(null);
     
-    console.log('ドロップ処理開始:', { trackId, timePosition, draggedClip });
     
     try {
       
       // 既存のクリップの移動かどうかチェック
       if (draggedClip) {
-        console.log('既存クリップの移動:', draggedClip.id, '元トラック:', draggedClip.originalTrackId, '新トラック:', trackId);
-        console.log('ドラッグオフセット:', dragOffset, 'マウス位置:', timePosition);
-        
         // ドラッグオフセットを考慮した新しい開始位置を計算
         const adjustedPosition = timePosition - dragOffset;
         // 8分音符に合わせて位置を調整（50px単位）
         const snappedPosition = Math.max(0, Math.round(adjustedPosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH);
         
-        console.log('調整後の位置:', adjustedPosition, 'スナップ後:', snappedPosition);
         
         // 既存クリップの移動
         const updatedClip = {
@@ -708,7 +678,6 @@ const DAWPage = () => {
         setTracks(prevTracks => prevTracks.map(track => {
           if (track.id === draggedClip.originalTrackId && track.id === trackId) {
             // 同じトラック内での移動
-            console.log('同じトラック内での移動');
             return {
               ...track,
               clips: track.clips.map(clip => 
@@ -717,14 +686,12 @@ const DAWPage = () => {
             };
           } else if (track.id === draggedClip.originalTrackId) {
             // 元のトラックからクリップを削除
-            console.log('元のトラックからクリップを削除');
             return {
               ...track,
               clips: track.clips.filter(clip => clip.id !== draggedClip.id)
             };
           } else if (track.id === trackId) {
             // 新しいトラックにクリップを追加
-            console.log('新しいトラックにクリップを追加');
             return {
               ...track,
               clips: [...track.clips, updatedClip]
@@ -775,14 +742,12 @@ const DAWPage = () => {
       // グローバル変数をクリア
       window.currentDraggedSound = null;
       
-      console.log('新しい音素材のドロップ:', { soundData, hasAudioBlob: !!soundData.audioBlob });
       
       // 音声の実際の継続時間を取得（現在のBPMに基づいて）
       let duration = 400; // デフォルト値（1小節）
       if (soundData.audioBlob) {
         try {
           duration = await getAudioDuration(soundData.audioBlob, bpm);
-          console.log('取得したduration:', duration, 'pixels (BPM:', bpm, ')');
         } catch (error) {
           console.warn('音声継続時間の取得に失敗しました:', error);
         }
@@ -805,20 +770,14 @@ const DAWPage = () => {
         trackId: trackId
       };
 
-      console.log('作成されたクリップ:', newClip);
-      console.log('現在のトラック数:', tracks.length);
-      console.log('対象トラックID:', trackId);
-      console.log('対象トラック:', tracks.find(t => t.id === trackId));
 
       // 関数型更新を使用して最新の状態を確実に取得
       setTracks(prevTracks => {
-        console.log('更新前のトラック:', prevTracks.find(t => t.id === trackId));
         const updatedTracks = prevTracks.map(track => 
           track.id === trackId 
             ? { ...track, clips: [...track.clips, newClip] }
             : track
         );
-        console.log('更新後のトラック:', updatedTracks.find(t => t.id === trackId));
         return updatedTracks;
       });
     } catch (error) {
@@ -860,9 +819,7 @@ const DAWPage = () => {
 
     // 初回ドラッグプレビュー表示時に強制クリーンアップタイマーを設定
     if (!window.dragCleanupTimer) {
-      console.log('強制クリーンアップタイマー設定（10秒後）');
       window.dragCleanupTimer = setTimeout(() => {
-        console.log('強制クリーンアップタイマー実行');
         cleanupDragState();
       }, 10000); // 10秒後に強制クリーンアップ
     }
@@ -932,13 +889,11 @@ const DAWPage = () => {
 
   // クリップのドラッグ開始
   const handleClipDragStart = (clip, originalTrackId, mouseX, clipElement) => {
-    console.log('クリップドラッグ開始:', clip.id, 'トラック:', originalTrackId);
     
     // クリップ内でのマウス位置のオフセットを計算
     const clipRect = clipElement.getBoundingClientRect();
     const offsetInClip = mouseX - clipRect.left;
     
-    console.log('ドラッグオフセット:', offsetInClip, 'クリップ開始位置:', clip.startTime);
     
     setDraggedClip({ ...clip, originalTrackId });
     setDragOffset(offsetInClip);
@@ -946,7 +901,6 @@ const DAWPage = () => {
 
   // ドラッグ状態の完全なクリーンアップ
   const cleanupDragState = useCallback(() => {
-    console.log('ドラッグ状態クリーンアップ実行');
     
     // ドラッグオーバーのタイムアウトをクリア
     if (dragOverTimeoutRef.current) {
@@ -995,14 +949,12 @@ const DAWPage = () => {
     
     // グローバルなドラッグ終了イベントリスナーを追加
     const handleGlobalDragEnd = () => {
-      console.log('グローバルドラッグ終了イベント検出');
       cleanupDragState();
     };
 
     const handleGlobalDragLeave = (e) => {
       // ドキュメント外にドラッグが出た場合
       if (!e.relatedTarget || e.relatedTarget.nodeName === 'HTML') {
-        console.log('ドキュメント外にドラッグアウト');
         cleanupDragState();
       }
     };
@@ -1025,7 +977,6 @@ const DAWPage = () => {
   const handleDragEnd = (e) => {
     // ドロップが正常に処理されなかった場合、元の状態を保持
     if (draggedClip && e && e.dataTransfer && e.dataTransfer.dropEffect === 'none') {
-      console.log('ドラッグがキャンセルされました。元の位置を保持します。');
     }
     
     // 完全なクリーンアップ
@@ -1083,7 +1034,6 @@ const DAWPage = () => {
   };
 
   const scheduleClipPlayback = (clip, delayMs, playingAudiosMap) => {
-    console.log('scheduleClipPlayback:', { clip, hasAudioBlob: !!clip.soundData?.audioBlob });
     
     if (clip.soundData && clip.soundData.audioBlob && clip.soundData.audioBlob instanceof Blob) {
       try {
@@ -1119,7 +1069,6 @@ const DAWPage = () => {
       
       // AudioBlobが無効な場合、audioDataから復元を試行
       if (clip.soundData && clip.soundData.audioData && !clip.soundData.audioBlob) {
-        console.log('audioDataからBlobを再作成中...');
         try {
           const byteCharacters = atob(clip.soundData.audioData.split(',')[1]);
           const byteNumbers = new Array(byteCharacters.length);
@@ -1194,11 +1143,7 @@ const DAWPage = () => {
         };
 
         localStorage.setItem('dawProjectAutoSave', JSON.stringify(projectData));
-        console.log('プロジェクトを自動保存しました:', {
-          tracksCount: tracks.length,
-          bpm: bpm,
-          totalClips: tracks.reduce((total, track) => total + track.clips.length, 0)
-        });
+
       } catch (error) {
         console.error('プロジェクトの自動保存に失敗:', error);
       }
@@ -1216,7 +1161,6 @@ const DAWPage = () => {
       if (!document.hidden) {
         // ページが表示されたときに音素材を再読み込み
         const savedSounds = JSON.parse(localStorage.getItem('soundRecordings') || '[]');
-        console.log('ページ表示時の音素材再読み込み - 件数:', savedSounds.length);
         
         // 音声データ復元処理（既存のロジックを再利用）
         const soundsWithBlob = savedSounds.map(sound => {
@@ -1249,7 +1193,6 @@ const DAWPage = () => {
         );
         
         setSounds(validSounds);
-        console.log('音素材更新完了 - 有効件数:', validSounds.length);
       }
     };
 
@@ -1264,7 +1207,6 @@ const DAWPage = () => {
   const clearAutoSave = () => {
     try {
       localStorage.removeItem('dawProjectAutoSave');
-      console.log('自動保存データをクリアしました');
       
       // 初期状態にリセット
       setTracks([{ 
@@ -1302,7 +1244,6 @@ const DAWPage = () => {
                           cleanedTracks.reduce((total, track) => total + track.clips.length, 0);
       
       if (removedCount > 0) {
-        console.log(`${removedCount}個の無効なクリップを除外しました`);
       }
       
       return cleanedTracks;
@@ -1464,18 +1405,15 @@ const DAWPage = () => {
                   sound={sound} 
                   onDragStart={async (sound) => {
                     // ドラッグ開始時に音声の長さを計算
-                    console.log('ドラッグ開始 - 音声長さ計算中:', sound.name);
                     if (sound.audioBlob) {
                       try {
                         const duration = await getAudioDuration(sound.audioBlob, bpm);
-                        console.log('計算された音声長さ:', duration, 'px');
                         setDraggedSoundDuration(duration);
                       } catch (error) {
                         console.warn('ドラッグ時の音声長さ計算に失敗:', error);
                         setDraggedSoundDuration(400);
                       }
                     } else {
-                      console.log('audioBlob が存在しません - デフォルト値使用');
                       setDraggedSoundDuration(400);
                     }
                   }}
@@ -1768,7 +1706,7 @@ const SoundItem = ({ sound, onDragStart }) => {
         setIsPlaying(false);
       }
     } else {
-      console.log('再生条件不満足:', {
+      console.error('再生条件不満足:', {
         hasAudioBlob: !!sound.audioBlob,
         isPlaying,
         isDragging
