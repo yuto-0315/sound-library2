@@ -9,6 +9,10 @@ const SUB_BEAT_WIDTH = BEAT_WIDTH / 2; // 8分音符の幅（50px）
 const TOTAL_MEASURES = 16; // 表示する小節数
 const TOTAL_BEATS = TOTAL_MEASURES * BEATS_PER_MEASURE; // 総拍数
 
+// 時間モードの定数
+const TIME_MODE_TOTAL_SECONDS = 60; // 表示する総秒数
+const PIXELS_PER_SECOND = 100; // 1秒あたりのピクセル数
+
 const DAWPage = () => {
   // ユニークID生成用のカウンター
   const trackIdCounterRef = useRef(1);
@@ -48,7 +52,9 @@ const DAWPage = () => {
             name: 'トラック 1', 
             clips: [] 
           }],
-          bpm: projectData.bpm || 120
+          bpm: projectData.bpm || 120,
+          isTimeMode: projectData.isTimeMode || false,
+          secondsPerBeat: projectData.secondsPerBeat || 0.5
         };
       }
     } catch (error) {
@@ -61,7 +67,9 @@ const DAWPage = () => {
         name: 'トラック 1', 
         clips: [] 
       }],
-      bpm: 120
+      bpm: 120,
+      isTimeMode: false,
+      secondsPerBeat: 0.5
     };
   };
 
@@ -81,6 +89,10 @@ const DAWPage = () => {
   const [dragPreview, setDragPreview] = useState(null);
   const [draggedSoundDuration, setDraggedSoundDuration] = useState(400); // ドラッグ中の音素材の長さ
   const [dragOffset, setDragOffset] = useState(0); // ドラッグ開始時のクリップ内オフセット
+  
+  // 時間モード関連の状態
+  const [isTimeMode, setIsTimeMode] = useState(initialData.isTimeMode); // false: 拍子モード, true: 秒数モード
+  const [secondsPerBeat, setSecondsPerBeat] = useState(initialData.secondsPerBeat); // 秒数モード時の1拍あたりの秒数
   const [isExporting, setIsExporting] = useState(false); // 音源出力中フラグ
   const timelineRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -208,7 +220,7 @@ const DAWPage = () => {
   }, []);
 
   // 音声ファイルの継続時間を取得してピクセル幅に変換
-  const getAudioDuration = useCallback((audioBlob, currentBpm = bpm) => {
+  const getAudioDuration = useCallback((audioBlob, currentBpm = bpm, currentSecondsPerBeat = secondsPerBeat) => {
     return new Promise(async (resolve) => {
       if (!audioBlob || !(audioBlob instanceof Blob)) {
         resolve(400);
@@ -225,7 +237,15 @@ const DAWPage = () => {
           
           
           if (isFinite(durationInSeconds) && durationInSeconds > 0) {
-            const pixelsPerSecond = (currentBpm / 60) * 100;
+            let pixelsPerSecond;
+            if (isTimeMode) {
+              // 秒数モード：1拍の秒数に基づいてピクセル/秒を計算
+              const beatWidthInPixels = currentSecondsPerBeat * PIXELS_PER_SECOND;
+              pixelsPerSecond = PIXELS_PER_SECOND;
+            } else {
+              // 拍子モード：BPMベース
+              pixelsPerSecond = (currentBpm / 60) * 100;
+            }
             const widthInPixels = durationInSeconds * pixelsPerSecond;
             resolve(widthInPixels);
             return;
@@ -236,14 +256,106 @@ const DAWPage = () => {
       }
       resolve(400);
     });
-  }, [audioContext, bpm]);
+  }, [audioContext, bpm, isTimeMode, secondsPerBeat]);
+
+  // 時間モードとBPMモードを切り替える関数
+  const toggleTimeMode = useCallback(async () => {
+    const newTimeMode = !isTimeMode;
+    setIsTimeMode(newTimeMode);
+    
+    // 既存のクリップのdurationを新しいモードで再計算
+    const updatedTracks = await Promise.all(
+      tracks.map(async (track) => {
+        const updatedClips = await Promise.all(
+          track.clips.map(async (clip) => {
+            if (clip.soundData && clip.soundData.audioBlob) {
+              try {
+                const arrayBuffer = await clip.soundData.audioBlob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                const durationInSeconds = audioBuffer.duration;
+                
+                let pixelsPerSecond;
+                if (newTimeMode) {
+                  pixelsPerSecond = PIXELS_PER_SECOND;
+                } else {
+                  pixelsPerSecond = (bpm / 60) * 100;
+                }
+                const newDuration = durationInSeconds * pixelsPerSecond;
+                
+                return { ...clip, duration: newDuration };
+              } catch (error) {
+                console.warn('クリップのduration再計算に失敗:', error);
+                return clip;
+              }
+            }
+            return clip;
+          })
+        );
+        return { ...track, clips: updatedClips };
+      })
+    );
+    
+    setTracks(updatedTracks);
+  }, [isTimeMode, tracks, audioContext, bpm]);
+
+  // 秒数モードでの1拍あたりの秒数を変更する関数
+  const handleSecondsPerBeatChange = useCallback(async (newSecondsPerBeat) => {
+    setSecondsPerBeat(newSecondsPerBeat);
+    
+    // 秒数モードの場合、既存のクリップのdurationを再計算
+    if (isTimeMode) {
+      const updatedTracks = await Promise.all(
+        tracks.map(async (track) => {
+          const updatedClips = await Promise.all(
+            track.clips.map(async (clip) => {
+              if (clip.soundData && clip.soundData.audioBlob) {
+                try {
+                  const newDuration = await getAudioDuration(clip.soundData.audioBlob, bpm, newSecondsPerBeat);
+                  return { ...clip, duration: newDuration };
+                } catch (error) {
+                  console.warn('クリップのduration再計算に失敗:', error);
+                  return clip;
+                }
+              }
+              return clip;
+            })
+          );
+          return { ...track, clips: updatedClips };
+        })
+      );
+      
+      setTracks(updatedTracks);
+    }
+  }, [isTimeMode, tracks, getAudioDuration, bpm]);
+
+  // スナップ処理（拍子モード vs 秒数モード）
+  const getSnapPosition = useCallback((position) => {
+    if (isTimeMode) {
+      // 秒数モード：1拍（秒数）単位でスナップ
+      const beatWidthInPixels = secondsPerBeat * PIXELS_PER_SECOND;
+      const subBeatWidth = beatWidthInPixels / 2; // 半拍でスナップ
+      return Math.round(position / subBeatWidth) * subBeatWidth;
+    } else {
+      // 拍子モード：8分音符単位でスナップ
+      return Math.round(position / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
+    }
+  }, [isTimeMode, secondsPerBeat]);
 
   // プレイヘッドのアニメーション更新
   const updatePlayhead = useCallback(() => {
     const animate = () => {
       if (isPlaying && startPlayTime) {
         const elapsed = (Date.now() - startPlayTime) / 1000; // 経過時間（秒）
-        const pixelsPerSecond = (bpm / 60) * 100; // BPMに基づいたピクセル/秒
+        
+        let pixelsPerSecond;
+        if (isTimeMode) {
+          // 秒数モード：直接1秒 = PIXELS_PER_SECONDピクセル
+          pixelsPerSecond = PIXELS_PER_SECOND;
+        } else {
+          // 拍子モード：BPMに基づいたピクセル/秒
+          pixelsPerSecond = (bpm / 60) * 100;
+        }
+        
         const newCurrentTime = elapsed * pixelsPerSecond;
         
         // 有効な数値かチェック
@@ -261,13 +373,19 @@ const DAWPage = () => {
     if (isPlaying && startPlayTime) {
       animate();
     }
-  }, [isPlaying, startPlayTime, bpm]);
+  }, [isPlaying, startPlayTime, bpm, isTimeMode]);
 
   useEffect(() => {
     if (isPlaying) {
       if (!startPlayTime) {
         // 再生開始時にstartPlayTimeを設定
-        const pixelsPerSecond = (bpm / 60) * 100;
+        let pixelsPerSecond;
+        if (isTimeMode) {
+          pixelsPerSecond = PIXELS_PER_SECOND;
+        } else {
+          pixelsPerSecond = (bpm / 60) * 100;
+        }
+        
         if (isFinite(pixelsPerSecond) && pixelsPerSecond > 0) {
           const timeInSeconds = currentTime / pixelsPerSecond;
           if (isFinite(timeInSeconds) && timeInSeconds >= 0) {
@@ -288,7 +406,7 @@ const DAWPage = () => {
       setStartPlayTime(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, bpm, currentTime]);
+  }, [isPlaying, bpm, currentTime, isTimeMode]);
 
   // startPlayTimeが設定されたときにアニメーションを開始
   useEffect(() => {
@@ -339,7 +457,9 @@ const DAWPage = () => {
         })),
         timestamp: Date.now(),
         trackNameCounter: trackNameCounterRef.current,
-        trackIdCounter: trackIdCounterRef.current
+        trackIdCounter: trackIdCounterRef.current,
+        isTimeMode: isTimeMode,
+        secondsPerBeat: secondsPerBeat
       };
 
       const projectJson = JSON.stringify(projectData, null, 2);
@@ -397,6 +517,10 @@ const DAWPage = () => {
 
         // BPMを復元
         setBpm(projectData.bpm || 120);
+        
+        // 時間モード設定を復元
+        setIsTimeMode(projectData.isTimeMode || false);
+        setSecondsPerBeat(projectData.secondsPerBeat || 0.5);
         
         // トラックを復元（クリップ内の音声データも復元）
         if (projectData.tracks) {
@@ -664,8 +788,8 @@ const DAWPage = () => {
       if (draggedClip) {
         // ドラッグオフセットを考慮した新しい開始位置を計算
         const adjustedPosition = timePosition - dragOffset;
-        // 8分音符に合わせて位置を調整（50px単位）
-        const snappedPosition = Math.max(0, Math.round(adjustedPosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH);
+        // 拍または秒に合わせて位置を調整
+        const snappedPosition = Math.max(0, getSnapPosition(adjustedPosition));
         
         
         // 既存クリップの移動
@@ -760,7 +884,7 @@ const DAWPage = () => {
       }
 
       // 新しい音素材の場合は通常のスナップ処理
-      const snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
+      const snappedPosition = getSnapPosition(timePosition);
 
       const newClip = {
         id: Date.now() + Math.random(), // より確実にユニークなIDを生成
@@ -834,10 +958,10 @@ const DAWPage = () => {
       if (draggedClip) {
         // 既存クリップの場合：ドラッグオフセットを考慮
         const adjustedPosition = timePosition - dragOffset;
-        snappedPosition = Math.max(0, Math.round(adjustedPosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH);
+        snappedPosition = Math.max(0, getSnapPosition(adjustedPosition));
       } else {
         // 新しい音素材の場合：通常の処理
-        snappedPosition = Math.round(timePosition / SUB_BEAT_WIDTH) * SUB_BEAT_WIDTH;
+        snappedPosition = getSnapPosition(timePosition);
       }
       
       const trackRect = trackElement.getBoundingClientRect();
@@ -993,7 +1117,13 @@ const DAWPage = () => {
       setIsPlaying(true);
       
       // 現在の時間位置に基づいて、再生すべきクリップを見つける
-      const pixelsPerSecond = (bpm / 60) * 100;
+      let pixelsPerSecond;
+      if (isTimeMode) {
+        pixelsPerSecond = PIXELS_PER_SECOND;
+      } else {
+        pixelsPerSecond = (bpm / 60) * 100;
+      }
+      
       const currentTimeInSeconds = currentTime / pixelsPerSecond;
       
       // 各トラックのクリップを再生
@@ -1139,7 +1269,9 @@ const DAWPage = () => {
           tracks: tracks,
           timestamp: Date.now(),
           trackNameCounter: trackNameCounterRef.current,
-          trackIdCounter: trackIdCounterRef.current
+          trackIdCounter: trackIdCounterRef.current,
+          isTimeMode: isTimeMode,
+          secondsPerBeat: secondsPerBeat
         };
 
         localStorage.setItem('dawProjectAutoSave', JSON.stringify(projectData));
@@ -1153,7 +1285,7 @@ const DAWPage = () => {
     if (tracks.length > 0) {
       autoSaveProject();
     }
-  }, [tracks, bpm]);
+  }, [tracks, bpm, isTimeMode, secondsPerBeat]);
 
   // 音素材の更新監視（他のページで音が追加された場合の対応）
   useEffect(() => {
@@ -1314,74 +1446,110 @@ const DAWPage = () => {
       )}
 
       <div className="daw-controls card">
-        <div className="transport-controls">
-          <button 
-            className={`transport-btn play-btn ${isPlaying ? 'playing' : ''}`}
-            onClick={isPlaying ? pause : play}
-          >
-            {isPlaying ? '⏸️' : '▶️'}
-          </button>
-          <button className="transport-btn stop-btn" onClick={stop}>
-            ⏹️
-          </button>
+        {/* 上段：音素材表示切り替え、保存関連機能 */}
+        <div className="top-controls-row">
+          <div className="left-controls">
+            <button 
+              className="button-secondary" 
+              onClick={() => setShowSoundPanel(!showSoundPanel)}
+            >
+              {showSoundPanel ? '🎵 音素材を隠す' : '🎵 音素材を表示'}
+            </button>
+          </div>
+
+          <div className="right-controls">
+            <div className="project-controls">
+              <button className="button-secondary" onClick={saveProject}>
+                💾 プロジェクト保存
+              </button>
+              <label className="button-secondary file-input-label">
+                📁 プロジェクト読み込み
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={loadProject}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            <button 
+              className="button-warning" 
+              onClick={() => {
+                if (window.confirm('🗑️ プロジェクトをリセットしますか？\n\n現在の作業内容がすべて削除されます。')) {
+                  clearAutoSave();
+                }
+              }}
+              title="プロジェクトをリセット（自動保存データもクリア）"
+            >
+              🗑️ リセット
+            </button>
+            <button 
+              className="button-primary" 
+              onClick={exportAudio}
+              disabled={isExporting}
+            >
+              {isExporting ? '🔄 出力中...' : '🎧 音源出力'}
+            </button>
+            </div>
+          </div>
         </div>
 
-        <div className="bpm-control">
-          <label htmlFor="bpm">🎵 BPM:</label>
-          <input
-            id="bpm"
-            type="number"
-            value={bpm}
-            onChange={(e) => handleBpmChange(parseInt(e.target.value))}
-            min="60"
-            max="200"
-            className="bpm-input"
-          />
-        </div>
+        {/* 下段：再生コントロール、BPM、モード設定 */}
+        <div className="bottom-controls-row">
+          <div className="transport-controls">
+            <button 
+              className={`transport-btn play-btn ${isPlaying ? 'playing' : ''}`}
+              onClick={isPlaying ? pause : play}
+            >
+              {isPlaying ? '⏸️' : '▶️'}
+            </button>
+            <button className="transport-btn stop-btn" onClick={stop}>
+              ⏹️
+            </button>
+          </div>
 
-        <div className="track-controls">
-          <button className="button-primary" onClick={addTrack}>
-            ➕ トラック追加
-          </button>
-          <button 
-            className="button-secondary" 
-            onClick={() => setShowSoundPanel(!showSoundPanel)}
-          >
-            {showSoundPanel ? '🎵 音素材を隠す' : '🎵 音素材を表示'}
-          </button>
-        </div>
+          <div className="timing-controls">
+            {!isTimeMode && (
+              <div className="bpm-control">
+                <label htmlFor="bpm">🎵 BPM:</label>
+                <input
+                  id="bpm"
+                  type="number"
+                  value={bpm}
+                  onChange={(e) => handleBpmChange(parseInt(e.target.value))}
+                  min="60"
+                  max="200"
+                  className="bpm-input"
+                />
+              </div>
+            )}
 
-        <div className="project-controls">
-          <button className="button-secondary" onClick={saveProject}>
-            💾 プロジェクト保存
-          </button>
-          <label className="button-secondary file-input-label">
-            📁 プロジェクト読み込み
-            <input
-              type="file"
-              accept=".json"
-              onChange={loadProject}
-              style={{ display: 'none' }}
-            />
-          </label>
-          <button 
-            className="button-warning" 
-            onClick={() => {
-              if (window.confirm('🗑️ プロジェクトをリセットしますか？\n\n現在の作業内容がすべて削除されます。')) {
-                clearAutoSave();
-              }
-            }}
-            title="プロジェクトをリセット（自動保存データもクリア）"
-          >
-            🗑️ リセット
-          </button>
-          <button 
-            className="button-primary" 
-            onClick={exportAudio}
-            disabled={isExporting}
-          >
-            {isExporting ? '🔄 出力中...' : '🎧 音源出力'}
-          </button>
+            <div className="time-mode-control">
+              <button 
+                className={`time-mode-toggle ${isTimeMode ? 'active' : ''}`}
+                onClick={toggleTimeMode}
+                title={isTimeMode ? '拍子モードに切り替え' : '秒数モードに切り替え'}
+              >
+                ⏰ {isTimeMode ? '秒数モード' : '拍子モード'}
+              </button>
+              
+              {isTimeMode && (
+                <div className="seconds-per-beat-control">
+                  <label htmlFor="secondsPerBeat">1拍:</label>
+                  <input
+                    id="secondsPerBeat"
+                    type="number"
+                    value={secondsPerBeat}
+                    onChange={(e) => handleSecondsPerBeatChange(parseFloat(e.target.value))}
+                    min="0.1"
+                    max="5.0"
+                    step="0.1"
+                    className="seconds-input"
+                  />
+                  <span>秒</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1407,7 +1575,7 @@ const DAWPage = () => {
                     // ドラッグ開始時に音声の長さを計算
                     if (sound.audioBlob) {
                       try {
-                        const duration = await getAudioDuration(sound.audioBlob, bpm);
+                        const duration = await getAudioDuration(sound.audioBlob, bpm, secondsPerBeat);
                         setDraggedSoundDuration(duration);
                       } catch (error) {
                         console.warn('ドラッグ時の音声長さ計算に失敗:', error);
@@ -1442,11 +1610,24 @@ const DAWPage = () => {
                 trackHeight={trackHeight}
               />
             ))}
+            <div className="track-add-button-container" style={{ height: trackHeight }}>
+              <button className="button-primary track-add-btn" onClick={addTrack}>
+                ➕ トラック追加
+              </button>
+            </div>
           </div>
 
           <div className="timeline-container">
-            <Timeline bpm={bpm} />
-            <div className="tracks-area" ref={timelineRef} style={{ minWidth: TOTAL_MEASURES * MEASURE_WIDTH }}>
+            <Timeline bpm={bpm} isTimeMode={isTimeMode} secondsPerBeat={secondsPerBeat} />
+            <div 
+              className="tracks-area" 
+              ref={timelineRef} 
+              style={{ 
+                minWidth: isTimeMode 
+                  ? Math.ceil(TIME_MODE_TOTAL_SECONDS / secondsPerBeat) * (secondsPerBeat * PIXELS_PER_SECOND)
+                  : TOTAL_MEASURES * MEASURE_WIDTH 
+              }}
+            >
               <Playhead currentTime={currentTime} />
               {dragPreview && (
                 <div 
@@ -1469,6 +1650,8 @@ const DAWPage = () => {
                   onDragEnd={handleDragEnd}
                   trackHeight={trackHeight}
                   updateDragPreview={updateDragPreview}
+                  isTimeMode={isTimeMode}
+                  secondsPerBeat={secondsPerBeat}
                 />
               ))}
             </div>
@@ -1483,10 +1666,11 @@ const DAWPage = () => {
           <li><strong>📱 スマホ/タブレット:</strong> 音素材を長押ししてからトラックまでドラッグして配置</li>
           <li>配置済みの音素材もドラッグして別の場所に移動できます</li>
           <li>ドラッグ中は配置予定位置に青い影が表示されます</li>
-          <li>音素材は8分音符（裏拍含む）に合わせて自動的に配置されます</li>
+          <li><strong>⏰ 時間モード切り替え:</strong> 「拍子モード」と「秒数モード」を切り替えできます</li>
+          <li><strong>拍子モード:</strong> 8分音符（裏拍含む）に合わせて音素材が自動配置され、BPMで速さを調整</li>
+          <li><strong>秒数モード:</strong> 小節や拍子の概念をなくし、「何秒で1拍」という単位で音素材を配置</li>
           <li>音素材パネルの▶️ボタンで個別に音を確認できます</li>
           <li>▶️ボタンで再生、⏸️ボタンで一時停止、⏹️ボタンで停止</li>
-          <li>BPMを変更して音楽の速さを調整</li>
           <li>トラックを追加して複数の音を重ねることができます</li>
           <li><strong>💾 プロジェクト保存:</strong> 編集中のデータをJSONファイルとして保存</li>
           <li><strong>📁 プロジェクト読み込み:</strong> 保存したプロジェクトファイルを読み込んで編集を再開</li>
@@ -1496,7 +1680,7 @@ const DAWPage = () => {
         <div className="auto-save-info">
           <h4>💾 自動保存機能</h4>
           <ul>
-            <li><strong>自動保存:</strong> トラックやBPMの変更は自動的に保存されます</li>
+            <li><strong>自動保存:</strong> トラック、BPM、時間モード設定の変更は自動的に保存されます</li>
             <li><strong>他ページとの連携:</strong> 「音あつめ」ページで録音した音は自動的に反映されます</li>
             <li><strong>復元機能:</strong> ページをリロードしても作業内容が自動的に復元されます</li>
             <li><strong>安心して移動:</strong> 他のページに移動しても作業内容は保持されます</li>
@@ -1799,38 +1983,71 @@ const TrackHeader = ({ track, onRemove, trackHeight, trackIndex }) => {
   );
 };
 
-const Timeline = ({ bpm }) => {
-  const measures = TOTAL_MEASURES; // 16小節表示
-  const beatsPerMeasure = BEATS_PER_MEASURE; // 4/4拍子
-
-  return (
-    <div className="timeline" style={{ minWidth: TOTAL_MEASURES * MEASURE_WIDTH }}>
-      {Array.from({ length: measures }, (_, measureIndex) => (
-        <div key={measureIndex} className="measure">
-          <div className="measure-number">{measureIndex + 1}</div>
-          <div className="beats">
-            {Array.from({ length: beatsPerMeasure }, (_, beatIndex) => (
-              <div 
-                key={beatIndex} 
-                className="beat"
-                style={{ width: BEAT_WIDTH }}
-              >
-                <div className="beat-main">
-                  {beatIndex + 1}
+const Timeline = ({ bpm, isTimeMode, secondsPerBeat }) => {
+  if (isTimeMode) {
+    // 秒数モード: 1拍の秒数に基づいて表示
+    const totalBeats = Math.ceil(TIME_MODE_TOTAL_SECONDS / secondsPerBeat);
+    const beatWidthInPixels = secondsPerBeat * PIXELS_PER_SECOND;
+    
+    return (
+      <div className="timeline" style={{ minWidth: totalBeats * beatWidthInPixels }}>
+        {Array.from({ length: Math.ceil(totalBeats / 4) }, (_, intervalIndex) => (
+          <div key={intervalIndex} className="time-interval">
+            <div className="time-number">{(intervalIndex * 4 * secondsPerBeat).toFixed(1)}秒</div>
+            <div className="time-marks">
+              {Array.from({ length: Math.min(4, totalBeats - intervalIndex * 4) }, (_, beatIndex) => (
+                <div 
+                  key={beatIndex} 
+                  className="time-mark"
+                  style={{ width: beatWidthInPixels }}
+                >
+                  <div className="time-main">
+                    {((intervalIndex * 4 + beatIndex + 1) * secondsPerBeat).toFixed(1)}s
+                  </div>
+                  <div className="time-sub">
+                    <div className="sub-time-marker">・</div>
+                  </div>
                 </div>
-                <div className="beat-sub">
-                  <div className="sub-beat-marker">・</div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
-  );
+        ))}
+      </div>
+    );
+  } else {
+    // 拍子モード: 従来の小節・拍表示
+    const measures = TOTAL_MEASURES; // 16小節表示
+    const beatsPerMeasure = BEATS_PER_MEASURE; // 4/4拍子
+
+    return (
+      <div className="timeline" style={{ minWidth: TOTAL_MEASURES * MEASURE_WIDTH }}>
+        {Array.from({ length: measures }, (_, measureIndex) => (
+          <div key={measureIndex} className="measure">
+            <div className="measure-number">{measureIndex + 1}</div>
+            <div className="beats">
+              {Array.from({ length: beatsPerMeasure }, (_, beatIndex) => (
+                <div 
+                  key={beatIndex} 
+                  className="beat"
+                  style={{ width: BEAT_WIDTH }}
+                >
+                  <div className="beat-main">
+                    {beatIndex + 1}
+                  </div>
+                  <div className="beat-sub">
+                    <div className="sub-beat-marker">・</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 };
 
-const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, updateDragPreview }) => {
+const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDragEnd, trackHeight, updateDragPreview, isTimeMode, secondsPerBeat }) => {
   const handleDrop = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const timePosition = e.clientX - rect.left;
@@ -1908,19 +2125,49 @@ const Track = ({ track, onDrop, onDragOver, onRemoveClip, onClipDragStart, onDra
       onDragOver={onDragOver}
     >
       <div className="track-grid">
-        {/* 表拍（主要な拍）の境界線を表示 */}
-        {Array.from({ length: TOTAL_BEATS }, (_, index) => {
-          const isFirstBeat = index === 0;
-          const isMeasureStart = index % BEATS_PER_MEASURE === 0;
-          const className = `beat-line beat-line-main ${isFirstBeat ? 'first-beat' : ''} ${isMeasureStart ? 'measure-start' : ''}`;
-          return (
-            <div key={`main-${index}`} className={className} style={{ left: index * BEAT_WIDTH }} />
-          );
-        })}
-        {/* 裏拍（8分音符）の境界線を表示 */}
-        {Array.from({ length: TOTAL_BEATS }, (_, index) => (
-          <div key={`sub-${index}`} className="beat-line beat-line-sub" style={{ left: index * BEAT_WIDTH + SUB_BEAT_WIDTH }} />
-        ))}
+        {isTimeMode ? (
+          // 秒数モード: 秒単位でグリッド線を表示
+          <>
+            {/* 1秒ごとの主要な境界線 */}
+            {Array.from({ length: TIME_MODE_TOTAL_SECONDS }, (_, index) => (
+              <div 
+                key={`time-main-${index}`} 
+                className={`beat-line beat-line-main ${index === 0 ? 'first-beat' : ''} ${index % 5 === 0 ? 'measure-start' : ''}`} 
+                style={{ left: index * PIXELS_PER_SECOND }} 
+              />
+            ))}
+            {/* 0.5秒ごとの副次的な境界線 */}
+            {Array.from({ length: TIME_MODE_TOTAL_SECONDS * 2 }, (_, index) => {
+              if (index % 2 === 1) { // 奇数のインデックス（0.5秒、1.5秒など）
+                return (
+                  <div 
+                    key={`time-sub-${index}`} 
+                    className="beat-line beat-line-sub" 
+                    style={{ left: (index * PIXELS_PER_SECOND) / 2 }} 
+                  />
+                );
+              }
+              return null;
+            })}
+          </>
+        ) : (
+          // 拍子モード: 従来の拍・小節グリッド
+          <>
+            {/* 表拍（主要な拍）の境界線を表示 */}
+            {Array.from({ length: TOTAL_BEATS }, (_, index) => {
+              const isFirstBeat = index === 0;
+              const isMeasureStart = index % BEATS_PER_MEASURE === 0;
+              const className = `beat-line beat-line-main ${isFirstBeat ? 'first-beat' : ''} ${isMeasureStart ? 'measure-start' : ''}`;
+              return (
+                <div key={`main-${index}`} className={className} style={{ left: index * BEAT_WIDTH }} />
+              );
+            })}
+            {/* 裏拍（8分音符）の境界線を表示 */}
+            {Array.from({ length: TOTAL_BEATS }, (_, index) => (
+              <div key={`sub-${index}`} className="beat-line beat-line-sub" style={{ left: index * BEAT_WIDTH + SUB_BEAT_WIDTH }} />
+            ))}
+          </>
+        )}
       </div>
       
       {track.clips.map(clip => (
